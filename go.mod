@@ -3,9 +3,12 @@ module gitlab.com/devpro_studio/FeatureChaos
 go 1.23.4
 
 require (
-	gitlab.com/devpro_studio/Paranoia v1.0.3
+	github.com/google/uuid v1.6.0
+	gitlab.com/devpro_studio/Paranoia v1.0.4
 	gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.0.2
 	gitlab.com/devpro_studio/Paranoia/pkg/cache/redis v1.0.1
+	gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.0.1
+	gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry-log v1.0.0
 	gitlab.com/devpro_studio/Paranoia/pkg/logger/std-log v1.0.0
 	gitlab.com/devpro_studio/Paranoia/pkg/server/grpc v1.0.0
 	google.golang.org/grpc v1.70.0
@@ -21,7 +24,6 @@ require (
 	github.com/getsentry/sentry-go/otel v0.31.1 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -34,8 +36,6 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/redis/go-redis/v9 v9.7.0 // indirect
-	gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.0.0 // indirect
-	gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry-log v1.0.0 // indirect
 	gitlab.com/devpro_studio/go_utils v1.1.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.59.0 // indirect

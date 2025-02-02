@@ -1,10 +1,5 @@
-# Укажите переменные для подключения к вашей базе данных
-DB_USER      ?= <USERNAME>
-DB_PASSWORD  ?= <PASSWORD>
-DB_NAME      ?= <DBNAME>
-DB_HOST      ?= 127.0.0.1
-DB_PORT      ?= 5432
-DB_SSLMODE   ?= disable
+include .env
+export $(shell sed 's/=.*//' .env)
 
 # Директория, в которой лежат миграции
 MIGRATIONS_DIR ?= migrations

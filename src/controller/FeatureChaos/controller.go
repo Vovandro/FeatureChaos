@@ -44,7 +44,7 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 			return nil
 
 		case <-ticker.C:
-			features := t.featureService.GetNewFeature(request.ServiceName, lastVersion)
+			features := t.featureService.GetNewFeature(response.Context(), request.ServiceName, lastVersion)
 
 			if len(features) > 0 {
 				resp := &GetFeatureResponse{

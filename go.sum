@@ -79,12 +79,16 @@ gitlab.com/devpro_studio/Paranoia v1.0.2 h1:8uYX4SC6PfqlAAcEEvDlXJ+xcDxrnucG8Cqa
 gitlab.com/devpro_studio/Paranoia v1.0.2/go.mod h1:nehg6a2Ey9C42vJI//tmz1NwJTzqpwUW6ELqOD794q4=
 gitlab.com/devpro_studio/Paranoia v1.0.3 h1:k5JZLRQyR1fqG7cSHDXPtPyzHbbHMqwx37IidVTOcno=
 gitlab.com/devpro_studio/Paranoia v1.0.3/go.mod h1:nehg6a2Ey9C42vJI//tmz1NwJTzqpwUW6ELqOD794q4=
+gitlab.com/devpro_studio/Paranoia v1.0.4 h1:Vhp1ROjxSvBa3RzgmT4zv9CoaskGQlbDiYA4wa5cxVk=
+gitlab.com/devpro_studio/Paranoia v1.0.4/go.mod h1:nehg6a2Ey9C42vJI//tmz1NwJTzqpwUW6ELqOD794q4=
 gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.0.2 h1:XKTTMmAtVZdiccEeLtIsIcp01Qf58Sf7H0iXjlcwYxA=
 gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.0.2/go.mod h1:xfXZN/xWaCZioCfufE0hOeT2VsqLeSA3vA0qtjpwPPI=
 gitlab.com/devpro_studio/Paranoia/pkg/cache/redis v1.0.1 h1:cjHQYwrpgJnJ4kxfMNP5ESYlBWv0hsW+KiQX+mdV+HQ=
 gitlab.com/devpro_studio/Paranoia/pkg/cache/redis v1.0.1/go.mod h1:5rOUmxLcNta3wmcdKl1USMNA7p5pp/4/b2rL9bNDRvI=
 gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.0.0 h1:WfUrYgoMgP9Z0n1dDeGoXxrGfSRmbViGBcvL6qs7b60=
 gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.0.0/go.mod h1:Uago0K7ANPREU5+ktpJQvDl+NWeSYgBcEpBfBsrCa4k=
+gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.0.1 h1:U8ZCEHwh80Tp6VsiNTEDVI72c0DuqNP0/nXWYBChiaQ=
+gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.0.1/go.mod h1:Uago0K7ANPREU5+ktpJQvDl+NWeSYgBcEpBfBsrCa4k=
 gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry-log v1.0.0 h1:mRB+vSjsnNjbDZlOwn9NKNk9ogwfjKx6g3h16kx3bU8=
 gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry-log v1.0.0/go.mod h1:y5csIAgyW3q5RHWHNciOjh7paob7FkoFjVLa9Una7tc=
 gitlab.com/devpro_studio/Paranoia/pkg/logger/std-log v1.0.0 h1:bJ3Gu1vfuTiIMZRG5pMAK/RcoGvYjn+EPtTAeafHj54=
