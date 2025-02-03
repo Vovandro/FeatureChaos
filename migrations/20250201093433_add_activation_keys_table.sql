@@ -8,6 +8,8 @@ create table activation_keys
     description text,
     created_at timestamp not null default now()
 );
+
+create index idx_activation_keys_feature_id on activation_keys(feature_id);
 -- +goose StatementEnd
 
 -- +goose Down

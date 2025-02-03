@@ -10,6 +10,10 @@ create table activation_values
     deleted_at timestamp default null,
     v bigint not null default 0
 );
+
+create index idx_activation_values_feature_id on activation_values(feature_id, deleted_at, v);
+create index idx_activation_values_activation_id on activation_values(activation_key_id, deleted_at, v);
+create index idx_activation_values_activation_param_id on activation_values(activation_param_id, deleted_at, v);
 -- +goose StatementEnd
 
 -- +goose Down
