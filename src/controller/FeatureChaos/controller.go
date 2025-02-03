@@ -2,12 +2,11 @@ package FeatureChaos
 
 import (
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/FeatureService"
+	"gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/controller"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/pkg/server/grpc"
 	grpc2 "google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"time"
 )
@@ -16,6 +15,7 @@ type Controller struct {
 	controller.Mock
 	UnimplementedFeatureServiceServer
 	featureService FeatureService.Interface
+	statsService   StatsService.Interface
 }
 
 func NewController(name string) *Controller {
@@ -29,6 +29,7 @@ func NewController(name string) *Controller {
 func (t *Controller) Init(app interfaces.IEngine, _ map[string]interface{}) error {
 	app.GetPkg(interfaces.PkgServer, "grpc").(grpc.IGrpc).RegisterService(&FeatureService_ServiceDesc, t)
 	t.featureService = app.GetModule(interfaces.ModuleService, "feature").(FeatureService.Interface)
+	t.statsService = app.GetModule(interfaces.ModuleService, "stats").(StatsService.Interface)
 
 	return nil
 }
@@ -93,5 +94,12 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 }
 
 func (t *Controller) Stats(request grpc2.ClientStreamingServer[SendStatsRequest, emptypb.Empty]) error {
-	return status.Errorf(codes.Unimplemented, "method Stats not implemented")
+	for {
+		req, err := request.Recv()
+		if err != nil {
+			return err
+		}
+
+		t.statsService.SetStat(request.Context(), req.ServiceName, req.FeatureName)
+	}
 }

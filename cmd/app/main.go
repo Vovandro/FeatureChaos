@@ -7,7 +7,9 @@ import (
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ServiceAccessRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/StatsRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/FeatureService"
+	"gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/pkg/cache/memory"
@@ -42,8 +44,10 @@ func main() {
 		PushModule(FeatureParamRepository.New("feature_param")).
 		PushModule(FeatureKeyRepository.New("feature_key")).
 		PushModule(ServiceAccessRepository.New("service_access")).
+		PushModule(StatsRepository.New("stats")).
 		PushModule(FeatureService.New("feature")).
-		PushModule(FeatureChaos.NewController("grpc_controller"))
+		PushModule(StatsService.New("stats")).
+		PushModule(FeatureChaos.NewController("grpc_controller")) // inner space
 
 	err := s.Init()
 	if err != nil {
