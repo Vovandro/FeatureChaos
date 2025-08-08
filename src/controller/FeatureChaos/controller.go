@@ -1,6 +1,9 @@
 package FeatureChaos
 
 import (
+	"io"
+	"time"
+
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/FeatureService"
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/controller"
@@ -8,7 +11,6 @@ import (
 	"gitlab.com/devpro_studio/Paranoia/pkg/server/grpc"
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"time"
 )
 
 type Controller struct {
@@ -30,7 +32,6 @@ func (t *Controller) Init(app interfaces.IEngine, _ map[string]interface{}) erro
 	app.GetPkg(interfaces.PkgServer, "grpc").(grpc.IGrpc).RegisterService(&FeatureService_ServiceDesc, t)
 	t.featureService = app.GetModule(interfaces.ModuleService, "feature").(FeatureService.Interface)
 	t.statsService = app.GetModule(interfaces.ModuleService, "stats").(StatsService.Interface)
-
 	return nil
 }
 
@@ -90,13 +91,16 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 		}
 	}
 
-	return nil
 }
 
 func (t *Controller) Stats(request grpc2.ClientStreamingServer[SendStatsRequest, emptypb.Empty]) error {
 	for {
 		req, err := request.Recv()
 		if err != nil {
+			// graceful close on EOF
+			if err == io.EOF {
+				return request.SendAndClose(&emptypb.Empty{})
+			}
 			return err
 		}
 

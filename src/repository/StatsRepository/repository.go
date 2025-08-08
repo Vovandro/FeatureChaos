@@ -2,6 +2,7 @@ package StatsRepository
 
 import (
 	"context"
+
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/repository"
 	"gitlab.com/devpro_studio/Paranoia/pkg/cache/redis"
@@ -21,7 +22,7 @@ func New(name string) *Repository {
 }
 
 func (t *Repository) Init(app interfaces.IEngine, _ map[string]interface{}) error {
-	t.cache = app.GetPkg(interfaces.PkgCache, "redis").(redis.IRedis)
+	t.cache = app.GetPkg(interfaces.PkgCache, "primary").(redis.IRedis)
 	return nil
 }
 

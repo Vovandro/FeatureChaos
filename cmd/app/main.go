@@ -2,12 +2,19 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
+	AdminHTTP "gitlab.com/devpro_studio/FeatureChaos/src/controller/AdminHTTP"
 	"gitlab.com/devpro_studio/FeatureChaos/src/controller/FeatureChaos"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ActivationValuesRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ServiceAccessRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/StatsRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/service/AdminService"
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/FeatureService"
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia"
@@ -18,9 +25,7 @@ import (
 	sentry_log "gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry-log"
 	std_log "gitlab.com/devpro_studio/Paranoia/pkg/logger/std-log"
 	"gitlab.com/devpro_studio/Paranoia/pkg/server/grpc"
-	"os"
-	"os/signal"
-	"syscall"
+	httpSrv "gitlab.com/devpro_studio/Paranoia/pkg/server/http"
 )
 
 func main() {
@@ -40,14 +45,18 @@ func main() {
 		PushPkg(redis.New("primary")).
 		PushPkg(postgres.New("primary")).
 		PushPkg(grpc.New("grpc")).
+		PushPkg(httpSrv.New("http")).
 		PushModule(FeatureRepository.New("feature")).
 		PushModule(FeatureParamRepository.New("feature_param")).
 		PushModule(FeatureKeyRepository.New("feature_key")).
+		PushModule(ActivationValuesRepository.New("activation_values")).
 		PushModule(ServiceAccessRepository.New("service_access")).
 		PushModule(StatsRepository.New("stats")).
 		PushModule(FeatureService.New("feature")).
 		PushModule(StatsService.New("stats")).
-		PushModule(FeatureChaos.NewController("grpc_controller")) // inner space
+		PushModule(AdminService.New("admin")).
+		PushModule(FeatureChaos.NewController("grpc_controller")). // inner space
+		PushModule(AdminHTTP.New("http_admin"))
 
 	err := s.Init()
 	if err != nil {

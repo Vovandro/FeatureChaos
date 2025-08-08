@@ -1,0 +1,16 @@
+{
+  "name": "devpro-studio/featurechaos-sdk",
+  "description": "FeatureChaos PHP SDK",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "FeatureChaos\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=8.1",
+    "grpc/grpc": "^1.62",
+    "google/protobuf": "^4.27"
+  }
+}
