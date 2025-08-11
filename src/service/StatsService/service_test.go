@@ -16,6 +16,9 @@ func (f *fakeStatsRepo) SetStat(_ context.Context, serviceName string, featureNa
 	f.feat = featureName
 }
 
+func (f *fakeStatsRepo) IsUsed(_ context.Context, _ string) bool        { return false }
+func (f *fakeStatsRepo) IsServiceUsed(_ context.Context, _ string) bool { return false }
+
 func TestSetStatDelegation(t *testing.T) {
 	repo := &fakeStatsRepo{}
 	svc := &Service{statsRepository: repo}

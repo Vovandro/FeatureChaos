@@ -3,7 +3,6 @@ package featurechaos
 import (
 	"context"
 	"errors"
-	"hash/fnv"
 	"net"
 	"sync"
 	"time"
@@ -139,27 +138,36 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 		return false
 	}
 
-	// Determine effective percent; start with global
-	effective := clampPercent(cfg.AllPercent)
-
-	// For each provided attribute, consider key-level config
-	for key, val := range attrs {
-		keyCfg, ok := cfg.Keys[key]
-		if !ok {
-			continue
-		}
-		if p, ok := keyCfg.Items[val]; ok {
-			if p > effective {
-				effective = clampPercent(p)
+	// Priority: exact value match -> key-level percent -> feature-level percent
+	percent := -1
+	if attrs != nil {
+		// Single pass over attrs: stop on first exact match, otherwise remember first key-level percent
+		keyLevel := -1
+		for key, val := range attrs {
+			if keyCfg, ok := cfg.Keys[key]; ok {
+				if p, ok2 := keyCfg.Items[val]; ok2 {
+					percent = p
+					break
+				}
+				if keyLevel < 0 {
+					keyLevel = keyCfg.AllPercent
+				}
 			}
-			continue
 		}
-		if keyCfg.AllPercent > effective {
-			effective = clampPercent(keyCfg.AllPercent)
+		if percent < 0 && keyLevel >= 0 {
+			percent = keyLevel
 		}
 	}
+	if percent < 0 {
+		percent = cfg.AllPercent
+	}
+	if percent < 0 {
+		percent = 0
+	} else if percent > 100 {
+		percent = 100
+	}
 
-	enabled := percentageHit(featureName, seed, effective)
+	enabled := fastBucketHit(featureName, seed, percent)
 	if enabled && c.autoStats {
 		c.Track(featureName)
 	}
@@ -324,19 +332,38 @@ func (c *Client) runStats(ctx context.Context) {
 }
 
 // percentageHit returns true if hash(seed+featureName) bucket is below percent [0..100]
-func percentageHit(featureName string, seed string, percent int) bool {
-	percent = clampPercent(percent)
+func percentageHit(featureName string, seed string, percent int) bool { // deprecated: kept for backwards compatibility
+	return fastBucketHit(featureName, seed, percent)
+}
+
+// fastBucketHit computes a bucket [0..99] using FNV-1a without allocations.
+func fastBucketHit(featureName string, seed string, percent int) bool {
+	// clamp percent
 	if percent <= 0 {
 		return false
 	}
 	if percent >= 100 {
 		return true
 	}
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(featureName))
-	_, _ = h.Write([]byte("::"))
-	_, _ = h.Write([]byte(seed))
-	bucket := int(h.Sum64() % 100)
+	const (
+		offset64 = 1469598103934665603
+		prime64  = 1099511628211
+	)
+	var hash uint64 = offset64
+	for i := 0; i < len(featureName); i++ {
+		hash ^= uint64(featureName[i])
+		hash *= prime64
+	}
+	// '::'
+	hash ^= uint64(':')
+	hash *= prime64
+	hash ^= uint64(':')
+	hash *= prime64
+	for i := 0; i < len(seed); i++ {
+		hash ^= uint64(seed[i])
+		hash *= prime64
+	}
+	bucket := int(hash % 100)
 	return bucket < percent
 }
 

@@ -188,7 +188,7 @@ func TestCreateFeature_BadBody(t *testing.T) {
 
 func TestListFeatures_OK(t *testing.T) {
 	fid := uuid.New()
-	ctl := &Controller{features: &fakeFeatures{items: []*db.Feature{{Id: fid, Name: "n", Description: "d", Value: 7, Version: 3}}}}
+	ctl := &Controller{features: &fakeFeatures{items: []*db.Feature{{Id: fid, Name: "n", Description: "d", Value: 7, Version: 3}}}, access: nil}
 	ctx := &fakeCtx{req: &fakeRequest{body: io.NopCloser(bytes.NewBuffer(nil))}, resp: &fakeResponse{}}
 	ctl.listFeatures(context.Background(), ctx)
 	resp := ctx.resp.(*fakeResponse)

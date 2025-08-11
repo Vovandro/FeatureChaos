@@ -18,6 +18,23 @@ type fakeAccessRepo struct{ ids []uuid.UUID }
 func (f *fakeAccessRepo) GetNewByServiceName(_ context.Context, _ string, _ int64) []uuid.UUID {
 	return f.ids
 }
+func (f *fakeAccessRepo) ListServices(_ context.Context) []AccessRepo.Service { return nil }
+func (f *fakeAccessRepo) CreateService(_ context.Context, _ string) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (f *fakeAccessRepo) DeleteService(_ context.Context, _ uuid.UUID) error { return nil }
+func (f *fakeAccessRepo) GetServiceById(_ context.Context, _ uuid.UUID) (AccessRepo.Service, bool) {
+	return AccessRepo.Service{}, false
+}
+func (f *fakeAccessRepo) HasAnyAccessByService(_ context.Context, _ uuid.UUID) bool { return false }
+func (f *fakeAccessRepo) GetServicesByFeature(_ context.Context, _ uuid.UUID) []AccessRepo.Service {
+	return nil
+}
+func (f *fakeAccessRepo) GetServicesByFeatureList(_ context.Context, _ []uuid.UUID) map[uuid.UUID][]AccessRepo.Service {
+	return nil
+}
+func (f *fakeAccessRepo) AddAccess(_ context.Context, _ uuid.UUID, _ uuid.UUID) error    { return nil }
+func (f *fakeAccessRepo) RemoveAccess(_ context.Context, _ uuid.UUID, _ uuid.UUID) error { return nil }
 
 type fakeFeatureRepo struct{ features []*db.Feature }
 

@@ -1,0 +1,21 @@
+engine:
+  - type: logger
+    name: std
+    level: DEBUG
+    enable: true
+  - type: cache
+    name: primary
+    hosts: "127.0.0.1:6379"
+  - type: cache
+    name: secondary
+    time_clear: 60s
+    shard_count: 5
+  - type: database
+    name: primary
+    uri: "postgres://postgres:passwd@127.0.0.1:5432/features"
+  - type: server
+    name: grpc
+    port: 9090
+  - type: server
+    name: http
+    port: 8080

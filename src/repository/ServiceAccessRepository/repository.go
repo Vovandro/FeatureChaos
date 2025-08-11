@@ -81,3 +81,136 @@ WHERE s.name = $1 AND av.v > $2 AND av.deleted_at IS NULL
 
 	return res
 }
+
+// Services CRUD
+func (t *Repository) ListServices(c context.Context) []Service {
+	rows, err := t.db.Query(c, `SELECT id, name FROM services ORDER BY name`)
+	if err != nil {
+		t.logger.Error(c, err)
+		return nil
+	}
+	defer rows.Close()
+	out := make([]Service, 0)
+	for rows.Next() {
+		var s Service
+		if err := rows.Scan(&s.Id, &s.Name); err != nil {
+			t.logger.Error(c, err)
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func (t *Repository) CreateService(c context.Context, name string) (uuid.UUID, error) {
+	id := uuid.New()
+	if err := t.db.Exec(c, `INSERT INTO services(id, name) VALUES($1,$2)`, id, name); err != nil {
+		t.logger.Error(c, err)
+		return uuid.Nil, err
+	}
+	return id, nil
+}
+
+func (t *Repository) DeleteService(c context.Context, id uuid.UUID) error {
+	if err := t.db.Exec(c, `DELETE FROM services WHERE id=$1`, id); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+	return nil
+}
+
+// Feature-Service bindings
+func (t *Repository) GetServicesByFeature(c context.Context, featureId uuid.UUID) []Service {
+	rows, err := t.db.Query(c, `SELECT s.id, s.name FROM service_access sa JOIN services s ON s.id = sa.service_id WHERE sa.feature_id = $1 ORDER BY s.name`, featureId)
+	if err != nil {
+		t.logger.Error(c, err)
+		return nil
+	}
+	defer rows.Close()
+	out := make([]Service, 0)
+	for rows.Next() {
+		var s Service
+		if err := rows.Scan(&s.Id, &s.Name); err != nil {
+			t.logger.Error(c, err)
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func (t *Repository) GetServiceById(c context.Context, id uuid.UUID) (Service, bool) {
+	rows, err := t.db.Query(c, `SELECT id, name FROM services WHERE id=$1`, id)
+	if err != nil {
+		t.logger.Error(c, err)
+		return Service{}, false
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var s Service
+		if err := rows.Scan(&s.Id, &s.Name); err != nil {
+			t.logger.Error(c, err)
+			return Service{}, false
+		}
+		return s, true
+	}
+	return Service{}, false
+}
+
+func (t *Repository) HasAnyAccessByService(c context.Context, id uuid.UUID) bool {
+	rows, err := t.db.Query(c, `SELECT 1 FROM service_access WHERE service_id=$1 LIMIT 1`, id)
+	if err != nil {
+		t.logger.Error(c, err)
+		return false
+	}
+	defer rows.Close()
+	return rows.Next()
+}
+
+func (t *Repository) GetServicesByFeatureList(c context.Context, featureIds []uuid.UUID) map[uuid.UUID][]Service {
+	rows, err := t.db.Query(c, `SELECT sa.feature_id, s.id, s.name FROM service_access sa JOIN services s ON s.id = sa.service_id WHERE sa.feature_id = ANY($1)`, featureIds)
+	if err != nil {
+		t.logger.Error(c, err)
+		return nil
+	}
+	defer rows.Close()
+	out := make(map[uuid.UUID][]Service)
+	for rows.Next() {
+		var fid uuid.UUID
+		var s Service
+		if err := rows.Scan(&fid, &s.Id, &s.Name); err != nil {
+			t.logger.Error(c, err)
+			continue
+		}
+		out[fid] = append(out[fid], s)
+	}
+	return out
+}
+
+func (t *Repository) AddAccess(c context.Context, featureId uuid.UUID, serviceId uuid.UUID) error {
+	// Avoid relying on ON CONFLICT without a unique index; check existence first
+	rows, err := t.db.Query(c, `SELECT 1 FROM service_access WHERE feature_id=$1 AND service_id=$2 LIMIT 1`, featureId, serviceId)
+	if err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		// already linked
+		return nil
+	}
+	id := uuid.New()
+	if err := t.db.Exec(c, `INSERT INTO service_access(id, feature_id, service_id) VALUES($1,$2,$3)`, id, featureId, serviceId); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+	return nil
+}
+
+func (t *Repository) RemoveAccess(c context.Context, featureId uuid.UUID, serviceId uuid.UUID) error {
+	if err := t.db.Exec(c, `DELETE FROM service_access WHERE feature_id=$1 AND service_id=$2`, featureId, serviceId); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+	return nil
+}

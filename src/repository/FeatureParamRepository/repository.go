@@ -64,12 +64,17 @@ SELECT
     ap.feature_id,
     ap.activation_id,
     ap.name,
-    COALESCE(av.value, 0) AS value,
-    COALESCE(av.v, 0)     AS v
+    COALESCE(vv.value, 0) AS value,
+    COALESCE(vv.v, 0)     AS v
 FROM activation_params AS ap
-LEFT JOIN activation_values AS av
-    ON av.activation_param_id = ap.id
-   AND av.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT value, v
+    FROM activation_values av
+    WHERE av.activation_param_id = ap.id
+      AND av.deleted_at IS NULL
+    ORDER BY v DESC
+    LIMIT 1
+) vv ON true
 WHERE ap.feature_id = ANY($1)
 `, featureIds)
 	if err != nil {
@@ -100,12 +105,17 @@ SELECT
     ap.feature_id,
     ap.activation_id,
     ap.name,
-    COALESCE(av.value, 0) AS value,
-    COALESCE(av.v, 0)     AS v
+    COALESCE(vv.value, 0) AS value,
+    COALESCE(vv.v, 0)     AS v
 FROM activation_params AS ap
-LEFT JOIN activation_values AS av
-    ON av.activation_param_id = ap.id
-   AND av.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT value, v
+    FROM activation_values av
+    WHERE av.activation_param_id = ap.id
+      AND av.deleted_at IS NULL
+    ORDER BY v DESC
+    LIMIT 1
+) vv ON true
 WHERE ap.activation_id = $1
 `, keyId)
 	if err != nil {

@@ -60,18 +60,30 @@ class FeatureChaosClient:
         if not cfg:
             return False
 
-        effective = max(0, min(100, int(cfg.get("all", 0))))
         keys = cfg.get("keys", {})
+        percent = -1
+        # pass 1: any exact value match among provided attrs
         for k, v in (attrs or {}).items():
             kc = keys.get(k)
-            if not kc:
-                continue
-            if v in kc["items"]:
-                effective = max(effective, kc["items"][v])
-            else:
-                effective = max(effective, kc.get("all", 0))
+            if kc and v in kc.get("items", {}):
+                percent = int(kc["items"][v])
+                break
+        # pass 2: any key-level percent if no exact match
+        if percent < 0:
+            for k in (attrs or {}).keys():
+                kc = keys.get(k)
+                if kc:
+                    percent = int(kc.get("all", 0))
+                    break
+        if percent < 0:
+            percent = int(cfg.get("all", 0))
 
-        enabled = self._percentage_hit(feature_name, seed, effective)
+        if percent <= 0:
+            return False
+        if percent >= 100:
+            enabled = True
+        else:
+            enabled = self._fast_bucket_hit(feature_name, seed, percent)
         if enabled and self._options.auto_send_stats:
             self.track(feature_name)
         return enabled
@@ -215,4 +227,21 @@ class FeatureChaosClient:
         h = hashlib.blake2b(digest_size=8)
         h.update(feature_name.encode()); h.update(b"::"); h.update(seed.encode())
         bucket = int.from_bytes(h.digest(), "big") % 100
+        return bucket < percent
+
+    @staticmethod
+    def _fast_bucket_hit(feature_name: str, seed: str, percent: int) -> bool:
+        # FNV-1a 64-bit, minimal allocations
+        # clamp already checked by caller
+        h = 0xcbf29ce484222325
+        for ch in feature_name.encode():
+            h ^= ch
+            h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+        # '::'
+        h ^= ord(':'); h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+        h ^= ord(':'); h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+        for ch in seed.encode():
+            h ^= ch
+            h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+        bucket = h % 100
         return bucket < percent

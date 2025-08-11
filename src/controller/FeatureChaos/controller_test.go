@@ -19,7 +19,9 @@ func (f *fakeFeatureSvc) GetNewFeature(context.Context, string, int64) []*dto.Fe
 
 type fakeStatsSvc struct{ called int }
 
-func (f *fakeStatsSvc) SetStat(context.Context, string, string) { f.called++ }
+func (f *fakeStatsSvc) SetStat(context.Context, string, string)    { f.called++ }
+func (f *fakeStatsSvc) IsUsed(context.Context, string) bool        { return true }
+func (f *fakeStatsSvc) IsServiceUsed(context.Context, string) bool { return true }
 
 // simple in-memory stream for server streaming
 type memStream struct {

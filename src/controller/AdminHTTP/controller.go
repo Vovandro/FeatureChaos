@@ -10,7 +10,9 @@ import (
 	FeatureKeyRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
 	FeatureParamRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
 	FeatureRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
+	ServiceAccessRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/ServiceAccessRepository"
 	AdminService "gitlab.com/devpro_studio/FeatureChaos/src/service/AdminService"
+	StatsService "gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/controller"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	httpSrv "gitlab.com/devpro_studio/Paranoia/pkg/server/http"
@@ -28,6 +30,8 @@ type Controller struct {
 	features FeatureRepository.Interface
 	keys     FeatureKeyRepository.Interface
 	params   FeatureParamRepository.Interface
+	stats    StatsService.Interface
+	access   ServiceAccessRepository.Interface
 }
 
 func New(name string) *Controller {
@@ -39,6 +43,8 @@ func (t *Controller) Init(app interfaces.IEngine, _ map[string]interface{}) erro
 	t.features = app.GetModule(interfaces.ModuleRepository, "feature").(FeatureRepository.Interface)
 	t.keys = app.GetModule(interfaces.ModuleRepository, "feature_key").(FeatureKeyRepository.Interface)
 	t.params = app.GetModule(interfaces.ModuleRepository, "feature_param").(FeatureParamRepository.Interface)
+	t.stats = app.GetModule(interfaces.ModuleService, "stats").(StatsService.Interface)
+	t.access = app.GetModule(interfaces.ModuleRepository, "service_access").(ServiceAccessRepository.Interface)
 	http := app.GetPkg(interfaces.PkgServer, "http").(httpSrv.IHttp)
 
 	// static
@@ -47,6 +53,13 @@ func (t *Controller) Init(app interfaces.IEngine, _ map[string]interface{}) erro
 	// features
 	http.PushRoute("GET", "/api/features", t.listFeatures, nil)
 	http.PushRoute("GET", "/api/features/{id}/keys", t.listKeys, nil)
+	http.PushRoute("GET", "/api/features/{id}/services", t.listFeatureServices, nil)
+	http.PushRoute("POST", "/api/features/{id}/services/{sid}", t.addFeatureService, nil)
+	http.PushRoute("DELETE", "/api/features/{id}/services/{sid}", t.removeFeatureService, nil)
+	// services
+	http.PushRoute("GET", "/api/services", t.listServices, nil)
+	http.PushRoute("POST", "/api/services", t.createService, nil)
+	http.PushRoute("DELETE", "/api/services/{id}", t.deleteService, nil)
 	http.PushRoute("POST", "/api/features", t.createFeature, nil)
 	http.PushRoute("PUT", "/api/features/{id}", t.updateFeature, nil)
 	http.PushRoute("DELETE", "/api/features/{id}", t.deleteFeature, nil)
@@ -143,6 +156,18 @@ func (t *Controller) deleteFeature(_ context.Context, ctx httpSrv.ICtx) {
 		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
+	// prevent deletion when feature is active by statistics
+	// check activity by feature name
+	if t.stats != nil {
+		// need feature name to check usage; fetch list and find match
+		feats := t.features.GetFeaturesList(context.Background(), []uuid.UUID{id})
+		if len(feats) == 1 {
+			if t.stats.IsUsed(context.Background(), feats[0].Name) {
+				respondJSON(ctx, http.StatusConflict, map[string]string{"error": "feature is active"})
+				return
+			}
+		}
+	}
 	if err := t.adminSvc.DeleteFeature(context.Background(), id); err != nil {
 		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -176,18 +201,164 @@ func (t *Controller) setFeatureValue(_ context.Context, ctx httpSrv.ICtx) {
 
 func (t *Controller) listFeatures(_ context.Context, ctx httpSrv.ICtx) {
 	items := t.features.ListFeatures(context.Background())
+	// Batch fetch services for all features to avoid per-item queries (nil-safe)
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.Id)
+	}
+	var svcMap map[uuid.UUID][]ServiceAccessRepository.Service
+	if t.access != nil && len(ids) > 0 {
+		svcMap = t.access.GetServicesByFeatureList(context.Background(), ids)
+	} else {
+		svcMap = make(map[uuid.UUID][]ServiceAccessRepository.Service)
+	}
 	type resp struct {
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Value       int    `json:"value"`
 		Version     int64  `json:"version"`
+		Used        bool   `json:"used"`
+		Services    []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"services"`
 	}
 	out := make([]resp, 0, len(items))
 	for _, it := range items {
-		out = append(out, resp{ID: it.Id.String(), Name: it.Name, Description: it.Description, Value: it.Value, Version: it.Version})
+		used := false
+		if t.stats != nil {
+			used = t.stats.IsUsed(context.Background(), it.Name)
+		}
+		svcs := svcMap[it.Id]
+		svcResp := make([]struct {
+			ID   string "json:\"id\""
+			Name string "json:\"name\""
+		}, len(svcs))
+		for i, s := range svcs {
+			svcResp[i] = struct {
+				ID   string "json:\"id\""
+				Name string "json:\"name\""
+			}{ID: s.Id.String(), Name: s.Name}
+		}
+		out = append(out, resp{ID: it.Id.String(), Name: it.Name, Description: it.Description, Value: it.Value, Version: it.Version, Used: used, Services: svcResp})
 	}
 	respondJSON(ctx, http.StatusOK, out)
+}
+
+// Services CRUD endpoints
+func (t *Controller) listServices(_ context.Context, ctx httpSrv.ICtx) {
+	svcs := t.access.ListServices(context.Background())
+	type resp struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Active bool   `json:"active"`
+	}
+	out := make([]resp, len(svcs))
+	for i, s := range svcs {
+		active := false
+		if t.stats != nil {
+			active = t.stats.IsServiceUsed(context.Background(), s.Name)
+		}
+		out[i] = resp{ID: s.Id.String(), Name: s.Name, Active: active}
+	}
+	respondJSON(ctx, http.StatusOK, out)
+}
+
+func (t *Controller) createService(_ context.Context, ctx httpSrv.ICtx) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := parseJSON(ctx, &body); err != nil || body.Name == "" {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	id, err := t.access.CreateService(context.Background(), body.Name)
+	if err != nil {
+		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(ctx, http.StatusCreated, map[string]string{"id": id.String()})
+}
+
+func (t *Controller) deleteService(_ context.Context, ctx httpSrv.ICtx) {
+	idStr := ctx.GetRouterValue("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+	// prevent deletion when service is active by statistics
+	if t.stats != nil {
+		if s, ok := t.access.GetServiceById(context.Background(), id); ok {
+			if t.stats.IsServiceUsed(context.Background(), s.Name) {
+				respondJSON(ctx, http.StatusConflict, map[string]string{"error": "service is active"})
+				return
+			}
+		}
+	}
+	if err := t.access.DeleteService(context.Background(), id); err != nil {
+		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(ctx, http.StatusNoContent, nil)
+}
+
+// Feature-service binding endpoints
+func (t *Controller) listFeatureServices(_ context.Context, ctx httpSrv.ICtx) {
+	fidStr := ctx.GetRouterValue("id")
+	fid, err := uuid.Parse(fidStr)
+	if err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid feature id"})
+		return
+	}
+	svcs := t.access.GetServicesByFeature(context.Background(), fid)
+	type resp struct{ ID, Name string }
+	out := make([]resp, len(svcs))
+	for i, s := range svcs {
+		out[i] = resp{ID: s.Id.String(), Name: s.Name}
+	}
+	respondJSON(ctx, http.StatusOK, out)
+}
+
+func (t *Controller) addFeatureService(_ context.Context, ctx httpSrv.ICtx) {
+	fidStr := ctx.GetRouterValue("id")
+	sidStr := ctx.GetRouterValue("sid")
+	fid, err := uuid.Parse(fidStr)
+	if err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid feature id"})
+		return
+	}
+	sid, err := uuid.Parse(sidStr)
+	if err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid service id"})
+		return
+	}
+	if err := t.access.AddAccess(context.Background(), fid, sid); err != nil {
+		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(ctx, http.StatusCreated, map[string]string{"status": "ok"})
+}
+
+func (t *Controller) removeFeatureService(_ context.Context, ctx httpSrv.ICtx) {
+	fidStr := ctx.GetRouterValue("id")
+	sidStr := ctx.GetRouterValue("sid")
+	fid, err := uuid.Parse(fidStr)
+	if err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid feature id"})
+		return
+	}
+	sid, err := uuid.Parse(sidStr)
+	if err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid service id"})
+		return
+	}
+	if err := t.access.RemoveAccess(context.Background(), fid, sid); err != nil {
+		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(ctx, http.StatusNoContent, nil)
 }
 
 type keyCreateReq struct {

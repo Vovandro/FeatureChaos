@@ -68,11 +68,16 @@ SELECT
     COALESCE(av.value, 0) AS value,
     COALESCE(av.v, 0)     AS v
 FROM features AS f
-LEFT JOIN activation_values AS av
-    ON av.feature_id = f.id
-   AND av.activation_key_id IS NULL
-   AND av.activation_param_id IS NULL
-   AND av.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT value, v
+    FROM activation_values av
+    WHERE av.feature_id = f.id
+      AND av.activation_key_id IS NULL
+      AND av.activation_param_id IS NULL
+      AND av.deleted_at IS NULL
+    ORDER BY v DESC
+    LIMIT 1
+) av ON true
 WHERE f.id = ANY($1)
 `, ids)
 
@@ -106,11 +111,16 @@ SELECT
     COALESCE(av.value, 0) AS value,
     COALESCE(av.v, 0)     AS v
 FROM features AS f
-LEFT JOIN activation_values AS av
-    ON av.feature_id = f.id
-   AND av.activation_key_id IS NULL
-   AND av.activation_param_id IS NULL
-   AND av.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT value, v
+    FROM activation_values av
+    WHERE av.feature_id = f.id
+      AND av.activation_key_id IS NULL
+      AND av.activation_param_id IS NULL
+      AND av.deleted_at IS NULL
+    ORDER BY v DESC
+    LIMIT 1
+) av ON true
 `)
 
 	if err != nil {

@@ -2,6 +2,7 @@ package StatsService
 
 import (
 	"context"
+
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/StatsRepository"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/service"
@@ -27,4 +28,12 @@ func (t *Service) Init(app interfaces.IEngine, cfg map[string]interface{}) error
 
 func (t *Service) SetStat(c context.Context, serviceName string, featureName string) {
 	t.statsRepository.SetStat(c, serviceName, featureName)
+}
+
+func (t *Service) IsUsed(c context.Context, featureName string) bool {
+	return t.statsRepository.IsUsed(c, featureName)
+}
+
+func (t *Service) IsServiceUsed(c context.Context, serviceName string) bool {
+	return t.statsRepository.IsServiceUsed(c, serviceName)
 }

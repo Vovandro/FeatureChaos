@@ -64,13 +64,18 @@ SELECT
     ak.feature_id,
     ak.key,
     ak.description,
-    COALESCE(av.value, 0) AS value,
-    COALESCE(av.v, 0)     AS v
+    COALESCE(vv.value, 0) AS value,
+    COALESCE(vv.v, 0)     AS v
 FROM activation_keys AS ak
-LEFT JOIN activation_values AS av
-    ON av.activation_key_id = ak.id
-   AND av.activation_param_id IS NULL
-   AND av.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT value, v
+    FROM activation_values av
+    WHERE av.activation_key_id = ak.id
+      AND av.activation_param_id IS NULL
+      AND av.deleted_at IS NULL
+    ORDER BY v DESC
+    LIMIT 1
+) vv ON true
 WHERE ak.feature_id = ANY($1)
 `, featureIds)
 	if err != nil {

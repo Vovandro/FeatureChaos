@@ -39,17 +39,23 @@ class Client
     {
         $cfg = $this->features[$featureName] ?? null;
         if (!$cfg) return false;
-        $effective = max(0, min(100, (int)($cfg['all'] ?? 0)));
+        // Priority: value match -> key-level -> feature
+        $percent = -1;
         foreach ($attrs as $k => $v) {
             if (!isset($cfg['keys'][$k])) continue;
             $kc = $cfg['keys'][$k];
-            if (isset($kc['items'][$v])) {
-                $effective = max($effective, (int)$kc['items'][$v]);
-            } else {
-                $effective = max($effective, (int)($kc['all'] ?? 0));
+            if (isset($kc['items'][$v])) { $percent = (int)$kc['items'][$v]; break; }
+        }
+        if ($percent < 0) {
+            foreach ($attrs as $k => $_) {
+                if (!isset($cfg['keys'][$k])) continue;
+                $kc = $cfg['keys'][$k];
+                $percent = (int)($kc['all'] ?? 0); break;
             }
         }
-        $enabled = $this->percentageHit($featureName, $seed, $effective);
+        if ($percent < 0) { $percent = (int)($cfg['all'] ?? 0); }
+        if ($percent <= 0) return false;
+        if ($percent >= 100) $enabled = true; else $enabled = $this->fastBucketHit($featureName, $seed, $percent);
         if ($enabled && $this->autoSendStats) {
             $this->track($featureName);
         }
@@ -105,5 +111,20 @@ class Client
         if ($percent >= 100) return true;
         $h = crc32($featureName . '::' . $seed);
         return ($h % 100) < $percent;
+    }
+
+    private function fastBucketHit(string $featureName, string $seed, int $percent): bool
+    {
+        // FNV-1a 64-bit in PHP ints
+        $h = 0xcbf29ce484222325;
+        $a = $featureName . '::' . $seed;
+        $len = strlen($a);
+        for ($i=0; $i<$len; $i++) {
+            $h ^= ord($a[$i]);
+            // multiply modulo 2^64; PHP int might be 64-bit on most envs; keep mask
+            $h = ($h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+        }
+        $bucket = $h % 100;
+        return $bucket < $percent;
     }
 }
