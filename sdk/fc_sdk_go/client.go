@@ -1,4 +1,4 @@
-package featurechaos
+package fc_sdk_go
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "gitlab.com/devpro_studio/featurechaos-sdk/pb"
+	pb "gitlab.com/devpro_studio/FeatureChaos/src/controller/FeatureChaos"
 )
 
 // FeatureConfig represents one feature configuration cached in SDK
@@ -44,6 +44,8 @@ type Options struct {
 	DialTimeout time.Duration
 	// Initial last known version; usually 0
 	InitialVersion int64
+	// How often to flush accumulated stats to the server. If <= 0, defaults to 3 minutes.
+	StatsFlushInterval time.Duration
 }
 
 // Client is a FeatureChaos SDK instance
@@ -63,6 +65,9 @@ type Client struct {
 	onUpdate   func(UpdateEvent)
 	cancelRoot context.CancelFunc
 	wg         sync.WaitGroup
+
+	// config
+	statsFlushInterval time.Duration
 }
 
 // New creates and starts a Client. Address must be host:port of the gRPC server.
@@ -90,15 +95,21 @@ func New(ctx context.Context, address string, serviceName string, opts Options) 
 		return nil, err
 	}
 
+	flushInterval := opts.StatsFlushInterval
+	if flushInterval <= 0 {
+		flushInterval = 3 * time.Minute
+	}
+
 	c := &Client{
-		conn:        conn,
-		client:      pb.NewFeatureServiceClient(conn),
-		serviceName: serviceName,
-		lastVersion: opts.InitialVersion,
-		features:    make(map[string]FeatureConfig),
-		statsCh:     make(chan string, 1024),
-		autoStats:   opts.AutoSendStats,
-		onUpdate:    opts.OnUpdate,
+		conn:               conn,
+		client:             pb.NewFeatureServiceClient(conn),
+		serviceName:        serviceName,
+		lastVersion:        opts.InitialVersion,
+		features:           make(map[string]FeatureConfig),
+		statsCh:            make(chan string, 1024),
+		autoStats:          opts.AutoSendStats,
+		onUpdate:           opts.OnUpdate,
+		statsFlushInterval: flushInterval,
 	}
 
 	rootCtx, cancelRoot := context.WithCancel(context.Background())
@@ -140,13 +151,15 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 
 	// Priority: exact value match -> key-level percent -> feature-level percent
 	percent := -1
+	hashSeed := seed
 	if attrs != nil {
-		// Single pass over attrs: stop on first exact match, otherwise remember first key-level percent
+		// Single pass: prefer exact match; remember first key-level percent
 		keyLevel := -1
 		for key, val := range attrs {
 			if keyCfg, ok := cfg.Keys[key]; ok {
 				if p, ok2 := keyCfg.Items[val]; ok2 {
 					percent = p
+					hashSeed = val
 					break
 				}
 				if keyLevel < 0 {
@@ -156,10 +169,12 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 		}
 		if percent < 0 && keyLevel >= 0 {
 			percent = keyLevel
+			hashSeed = seed
 		}
 	}
 	if percent < 0 {
 		percent = cfg.AllPercent
+		hashSeed = seed
 	}
 	if percent < 0 {
 		percent = 0
@@ -167,7 +182,7 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 		percent = 100
 	}
 
-	enabled := fastBucketHit(featureName, seed, percent)
+	enabled := fastBucketHit(featureName, hashSeed, percent)
 	if enabled && c.autoStats {
 		c.Track(featureName)
 	}
@@ -289,14 +304,14 @@ func (c *Client) applyUpdate(resp *pb.GetFeatureResponse) {
 }
 
 func (c *Client) runStats(ctx context.Context) {
-	// persistent stream with reconnect and drain of stats channel
+	// persistent stream with reconnect. Accumulate stats and flush periodically.
 	op := backoff.NewExponentialBackOff()
 	op.InitialInterval = 500 * time.Millisecond
 	op.MaxInterval = 10 * time.Second
 	var stream grpc.ClientStreamingClient[pb.SendStatsRequest, emptypb.Empty]
 
-	connect := func() bool {
-		s, err := c.client.Stats(ctx)
+	connect := func(useCtx context.Context) bool {
+		s, err := c.client.Stats(useCtx)
 		if err != nil {
 			return false
 		}
@@ -305,9 +320,30 @@ func (c *Client) runStats(ctx context.Context) {
 		return true
 	}
 
+	// pending unique features to report once per interval
+	pending := make(map[string]struct{})
+	ticker := time.NewTicker(c.statsFlushInterval)
+	defer ticker.Stop()
+
+	flush := func() bool {
+		if len(pending) == 0 || stream == nil {
+			return true
+		}
+		for feat := range pending {
+			if err := stream.Send(&pb.SendStatsRequest{ServiceName: c.serviceName, FeatureName: feat}); err != nil {
+				return false
+			}
+		}
+		// on success, clear
+		for k := range pending {
+			delete(pending, k)
+		}
+		return true
+	}
+
 	for {
 		if stream == nil {
-			if !connect() {
+			if !connect(ctx) {
 				sleep := op.NextBackOff()
 				if sleep == backoff.Stop {
 					sleep = op.MaxInterval
@@ -318,15 +354,39 @@ func (c *Client) runStats(ctx context.Context) {
 		}
 		select {
 		case <-ctx.Done():
-			if stream != nil {
-				_, _ = stream.CloseAndRecv()
-			}
+			// best-effort final flush
+			_ = func() error {
+				// try to (re)connect if needed
+				if stream == nil {
+					// use short-lived background context for shutdown flush
+					bctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer cancel()
+					if !connect(bctx) {
+						return nil
+					}
+				}
+				_ = flush()
+				if stream != nil {
+					_, _ = stream.CloseAndRecv()
+				}
+				return nil
+			}()
 			return
 		case feat := <-c.statsCh:
-			if stream == nil {
-				continue
+			// accumulate unique
+			pending[feat] = struct{}{}
+			// optional: if buffer grows very large, flush opportunistically
+			if len(pending) > 512 {
+				if !flush() {
+					// reconnect and retry once on failure
+					stream = nil
+				}
 			}
-			_ = stream.Send(&pb.SendStatsRequest{ServiceName: c.serviceName, FeatureName: feat})
+		case <-ticker.C:
+			if !flush() {
+				// reconnect on failure and keep pending for next tick
+				stream = nil
+			}
 		}
 	}
 }

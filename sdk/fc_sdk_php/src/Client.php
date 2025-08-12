@@ -13,12 +13,19 @@ class Client
     private int $lastVersion = 0;
     private array $features = [];
     private bool $autoSendStats = true;
+    private array $statsBuffer = [];
+    private float $lastFlush = 0.0;
+    private float $flushIntervalSec = 180.0; // default ~3 minutes
 
-    public function __construct(string $address, string $serviceName, bool $autoSendStats = true)
+    public function __construct(string $address, string $serviceName, bool $autoSendStats = true, ?float $flushIntervalSec = null)
     {
         if (!$serviceName) { throw new \InvalidArgumentException('serviceName required'); }
         $this->serviceName = $serviceName;
         $this->autoSendStats = $autoSendStats;
+        $this->lastFlush = microtime(true);
+        if ($flushIntervalSec !== null && $flushIntervalSec > 0) {
+            $this->flushIntervalSec = $flushIntervalSec;
+        }
 
         // Low-level dynamic stubs using generic grpc BaseStub
         $this->subscribeStub = new class($address, ['credentials' => ChannelCredentials::createInsecure()]) extends \Grpc\BaseStub {
@@ -39,23 +46,23 @@ class Client
     {
         $cfg = $this->features[$featureName] ?? null;
         if (!$cfg) return false;
-        // Priority: value match -> key-level -> feature
+        // Priority & seeding rules:
+        // - exact key/value match -> use the attribute value as hash seed
+        // - key exists but no value match -> use provided seed
+        // - no key match -> use provided seed with feature-level percent
         $percent = -1;
-        foreach ($attrs as $k => $v) {
+        $hashSeed = $seed;
+        $keyLevel = null;
+        foreach (($attrs ?? []) as $k => $v) {
             if (!isset($cfg['keys'][$k])) continue;
             $kc = $cfg['keys'][$k];
-            if (isset($kc['items'][$v])) { $percent = (int)$kc['items'][$v]; break; }
+            if (isset($kc['items'][$v])) { $percent = (int)$kc['items'][$v]; $hashSeed = (string)$v; break; }
+            if ($keyLevel === null) { $keyLevel = (int)($kc['all'] ?? 0); }
         }
-        if ($percent < 0) {
-            foreach ($attrs as $k => $_) {
-                if (!isset($cfg['keys'][$k])) continue;
-                $kc = $cfg['keys'][$k];
-                $percent = (int)($kc['all'] ?? 0); break;
-            }
-        }
-        if ($percent < 0) { $percent = (int)($cfg['all'] ?? 0); }
+        if ($percent < 0 && $keyLevel !== null) { $percent = $keyLevel; $hashSeed = $seed; }
+        if ($percent < 0) { $percent = (int)($cfg['all'] ?? 0); $hashSeed = $seed; }
         if ($percent <= 0) return false;
-        if ($percent >= 100) $enabled = true; else $enabled = $this->fastBucketHit($featureName, $seed, $percent);
+        if ($percent >= 100) $enabled = true; else $enabled = $this->fastBucketHit($featureName, $hashSeed, $percent);
         if ($enabled && $this->autoSendStats) {
             $this->track($featureName);
         }
@@ -64,14 +71,34 @@ class Client
 
     public function track(string $featureName): void
     {
-        // fire-and-forget; best-effort stream send in background could be added later
-        $call = $this->statsStub->call();
-        $req = new \FeatureChaos\SendStatsRequest();
-        $req->setServiceName($this->serviceName);
-        $req->setFeatureName($featureName);
-        $call->write($req);
-        $call->writesDone();
-        $call->getStatus();
+        // buffer and flush no more than every few minutes
+        $this->statsBuffer[$featureName] = ($this->statsBuffer[$featureName] ?? 0) + 1;
+        $now = microtime(true);
+        if ($now - $this->lastFlush >= $this->flushIntervalSec || count($this->statsBuffer) > 500) {
+            $this->flushStats();
+        }
+    }
+
+    public function flushStats(): void
+    {
+        if (empty($this->statsBuffer)) return;
+        $buf = $this->statsBuffer; // copy
+        $this->statsBuffer = [];
+        $this->lastFlush = microtime(true);
+        try {
+            $call = $this->statsStub->call();
+            foreach ($buf as $name => $_n) {
+                // send at most one event per feature per interval
+                $req = new \FeatureChaos\SendStatsRequest();
+                $req->setServiceName($this->serviceName);
+                $req->setFeatureName($name);
+                $call->write($req);
+            }
+            $call->writesDone();
+            $call->getStatus();
+        } catch (\Throwable $e) {
+            // swallow errors; best-effort
+        }
     }
 
     public function startSubscribeLoop(): void
@@ -126,5 +153,11 @@ class Client
         }
         $bucket = $h % 100;
         return $bucket < $percent;
+    }
+
+    public function __destruct()
+    {
+        // best-effort final flush of pending stats
+        $this->flushStats();
     }
 }

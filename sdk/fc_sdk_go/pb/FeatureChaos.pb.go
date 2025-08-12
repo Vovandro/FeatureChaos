@@ -7,11 +7,8 @@
 package pb
 
 import (
-	reflect "reflect"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
@@ -204,26 +201,7 @@ var file_FeatureChaos_proto_goTypes = []any{
 	(*GetAllFeatureRequest)(nil), // 2: FeatureChaos.GetAllFeatureRequest
 	(*SendStatsRequest)(nil),     // 3: FeatureChaos.SendStatsRequest
 	(*GetFeatureResponse)(nil),   // 4: FeatureChaos.GetFeatureResponse
-	(*emptypb.Empty)(nil),        // 5: google.protobuf.Empty
 }
 
-func init() { file_FeatureChaos_proto_init() }
-func file_FeatureChaos_proto_init() {
-	if File_FeatureChaos_proto != nil {
-		return
-	}
-	type x struct{}
-	out := protoimpl.TypeBuilder{
-		File: protoimpl.DescBuilder{
-			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: nil,
-			NumEnums:      0,
-			NumMessages:   5,
-			NumExtensions: 0,
-			NumServices:   0,
-		},
-		GoTypes:      file_FeatureChaos_proto_goTypes,
-		MessageInfos: file_FeatureChaos_proto_msgTypes,
-	}.Build()
-	File_FeatureChaos_proto = out.File
-}
+func init()                         { file_FeatureChaos_proto_init() }
+func file_FeatureChaos_proto_init() {}

@@ -17,6 +17,7 @@ class Options:
     auto_send_stats: bool = True
     on_update: Optional[Callable[[int, Dict[str, dict]], None]] = None
     initial_version: int = 0
+    stats_flush_interval_sec: float = 180.0  # default ~3 minutes
 
 
 class FeatureChaosClient:
@@ -31,6 +32,7 @@ class FeatureChaosClient:
         self._features = {}  # name -> {"all": int, "keys": {key: {"all": int, "items": {val: int}}}}
         self._lock = threading.RLock()
         self._stats_queue = []
+        self._last_flush = time.time()
         self._stop = threading.Event()
 
         # gRPC channel
@@ -49,6 +51,11 @@ class FeatureChaosClient:
 
     def close(self):
         self._stop.set()
+        # best-effort final flush
+        try:
+            self._run_stats_once_flush()
+        except Exception:
+            pass
         self._subscriber_thread.join(timeout=2)
         self._stats_thread.join(timeout=2)
         with contextlib.suppress(Exception):
@@ -62,28 +69,31 @@ class FeatureChaosClient:
 
         keys = cfg.get("keys", {})
         percent = -1
-        # pass 1: any exact value match among provided attrs
+        hash_seed = seed
+        # pass 1: exact value match -> use attribute value as hash seed
+        key_level = None
         for k, v in (attrs or {}).items():
             kc = keys.get(k)
             if kc and v in kc.get("items", {}):
                 percent = int(kc["items"][v])
+                hash_seed = str(v)
                 break
-        # pass 2: any key-level percent if no exact match
-        if percent < 0:
-            for k in (attrs or {}).keys():
-                kc = keys.get(k)
-                if kc:
-                    percent = int(kc.get("all", 0))
-                    break
+            if kc and key_level is None:
+                key_level = int(kc.get("all", 0))
+        # pass 2: any key-level percent if no exact match -> use provided seed
+        if percent < 0 and key_level is not None:
+            percent = key_level
+            hash_seed = seed
         if percent < 0:
             percent = int(cfg.get("all", 0))
+            hash_seed = seed
 
         if percent <= 0:
             return False
         if percent >= 100:
             enabled = True
         else:
-            enabled = self._fast_bucket_hit(feature_name, seed, percent)
+            enabled = self._fast_bucket_hit(feature_name, hash_seed, percent)
         if enabled and self._options.auto_send_stats:
             self.track(feature_name)
         return enabled
@@ -200,22 +210,48 @@ class FeatureChaosClient:
             cb(self._last_version, self.get_snapshot())
 
     def _run_stats(self):
+        # batch flush every stats_flush_interval_sec, or when buffer becomes large
         while not self._stop.is_set():
-            # drain queue chunk
+            to_send = []
+            now = time.time()
             with self._lock:
-                if not self._stats_queue:
-                    time.sleep(0.2)
-                    continue
-                chunk = self._stats_queue[:100]
-                self._stats_queue = self._stats_queue[100:]
-            # send stream
+                interval = max(1.0, float(self._options.stats_flush_interval_sec))
+                should_flush = (now - self._last_flush) >= interval or len(self._stats_queue) >= 1000
+                if should_flush and self._stats_queue:
+                    # aggregate by feature name
+                    counts = {}
+                    for name in self._stats_queue:
+                        counts[name] = counts.get(name, 0) + 1
+                    self._stats_queue.clear()
+                    self._last_flush = now
+                    to_send = counts.items()
+            if not to_send:
+                time.sleep(0.2)
+                continue
             with contextlib.suppress(Exception):
                 call = self._stats()
-                for feat in chunk:
-                    req = self._StatsReq(ServiceName=self._service_name, FeatureName=feat)
+                # send at most one event per feature per interval
+                for name, _n in to_send:
+                    req = self._StatsReq(ServiceName=self._service_name, FeatureName=name)
                     call.write(req)
                 call.done_writing()
                 _ = call.result()
+
+    def _run_stats_once_flush(self):
+        # helper for graceful shutdown
+        counts = {}
+        with self._lock:
+            for name in self._stats_queue:
+                counts[name] = counts.get(name, 0) + 1
+            self._stats_queue.clear()
+        if not counts:
+            return
+        call = self._stats()
+        for name in counts.keys():
+            req = self._StatsReq(ServiceName=self._service_name, FeatureName=name)
+            call.write(req)
+        call.done_writing()
+        _ = call.result()
 
     @staticmethod
     def _percentage_hit(feature_name: str, seed: str, percent: int) -> bool:

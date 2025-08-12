@@ -211,7 +211,7 @@ curl -X DELETE http://localhost:8080/api/features/{featureId}/services/{serviceI
 
 ### Go SDK (рекомендуется)
 
-Модуль: `sdk/featurechaos` (`go get gitlab.com/devpro_studio/featurechaos-sdk@latest`). Пример:
+Модуль: `sdk/fc_sdk_go` (`go get gitlab.com/devpro_studio/FeatureChaos/sdk/fc_sdk_go@latest`). Пример:
 
 ```go
 package main
@@ -219,7 +219,7 @@ package main
 import (
   "context"
   "fmt"
-  fc "gitlab.com/devpro_studio/featurechaos-sdk"
+  fc "gitlab.com/devpro_studio/FeatureChaos/sdk/fc_sdk_go"
 )
 
 func main() {
@@ -235,7 +235,7 @@ func main() {
 
 ### Python SDK
 
-Реализация в `sdk/python/featurechaos/client.py` (standalone, без сгенерированных pb).
+Реализация в `sdk/fc_sdk_py/featurechaos/client.py` (standalone, без сгенерированных pb).
 
 ```python
 from featurechaos.client import FeatureChaosClient, Options
@@ -248,7 +248,11 @@ finally:
     cli.close()
 ```
 
-> Примечание: убедитесь, что путь `sdk/python` доступен в `PYTHONPATH`, либо упакуйте SDK под свои нужды.
+> Примечание: убедитесь, что путь `sdk/fc_sdk_py` доступен в `PYTHONPATH`, либо установите пакет из каталога `sdk/fc_sdk_py`.
+
+### PHP SDK
+
+Исходники расположены в `sdk/fc_sdk_php/`. Простое подключение через Composer (vcs/path пакет) либо прямое использование класса `FeatureChaos\Client` из `sdk/fc_sdk_php/src/Client.php`.
 
 ## Как принимается решение включения фичи
 

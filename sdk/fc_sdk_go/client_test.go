@@ -1,4 +1,4 @@
-package featurechaos
+package fc_sdk_go
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "gitlab.com/devpro_studio/featurechaos-sdk/pb"
+	pb "gitlab.com/devpro_studio/FeatureChaos/src/controller/FeatureChaos"
 )
 
 // --- unit tests without server ---
@@ -154,7 +154,7 @@ func TestRunStats_TrackSends(t *testing.T) {
 	go func() { _ = s.Serve(lis) }()
 	defer s.GracefulStop()
 
-	c, err := New(context.Background(), lis.Addr().String(), "svcB", Options{})
+	c, err := New(context.Background(), lis.Addr().String(), "svcB", Options{StatsFlushInterval: 50 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("new: %v", err)
 	}

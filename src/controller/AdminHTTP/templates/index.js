@@ -22,10 +22,19 @@ async function fetchFeatures(){
     for(const k of (keys||[])){
       const params = await fetchParams(k.id);
       const paramsHtml = (params||[]).map(p=>
-        '<div class="params">'+p.name+' = '+p.value+'% <button class="mini" onclick="deleteParam(\''+p.id+'\')">✖</button></div>'
+        '<div class="params">'
+        + p.name + ' = '
+        + '<input type="number" id="p-value-'+p.id+'" value="'+p.value+'" class="value-input mini" min="0" max="100"/> % '
+        + '<button class="mini" onclick="setParamValue(\''+p.id+'\')">Save</button> '
+        + '<button class="mini" onclick="deleteParam(\''+p.id+'\')">✖</button>'
+        + '</div>'
       ).join('');
       keysHtmlResolved.push('<div class="keys">'
-        + '<div class="k-header"><span class="k-title">'+k.key+'</span> = '+k.value+'% <button class="mini" onclick="deleteKey(\''+k.id+'\')">✖</button></div>'
+        + '<div class="k-header"><span class="k-title">'+k.key+'</span> = '
+        + '<input type="number" id="k-value-'+k.id+'" value="'+k.value+'" class="value-input mini" min="0" max="100"/> % '
+        + '<button class="mini" onclick="setKeyValue(\''+k.id+'\')">Save</button> '
+        + '<button class="mini" onclick="deleteKey(\''+k.id+'\')">✖</button>'
+        + '</div>'
         + paramsHtml
         + '<div class="row"><input id="p-name-'+k.id+'" placeholder="param name" style="width:140px"/> '
         + '<input type="number" id="p-val-'+k.id+'" placeholder="0" style="width:80px" min="0" max="100"/> % '
@@ -84,6 +93,13 @@ async function setValue(id){
   let v = parseInt(document.getElementById('val-'+id).value||'0',10);
   v = clampPercent(v);
   const res = await fetch('/api/features/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v})});
+  if(res.ok){ await fetchFeatures(); }
+}
+
+async function setKeyValue(id){
+  let v = parseInt(document.getElementById('k-value-'+id).value||'0',10);
+  v = clampPercent(v);
+  const res = await fetch('/api/keys/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v})});
   if(res.ok){ await fetchFeatures(); }
 }
 
@@ -176,6 +192,13 @@ async function createParam(keyId){
     await fetch('/api/params/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value})});
     await fetchFeatures();
   }
+}
+
+async function setParamValue(id){
+  let v = parseInt(document.getElementById('p-value-'+id).value||'0',10);
+  v = clampPercent(v);
+  const res = await fetch('/api/params/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v})});
+  if(res.ok){ await fetchFeatures(); }
 }
 
 async function deleteParam(id){
