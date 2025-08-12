@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "gitlab.com/devpro_studio/FeatureChaos/src/controller/FeatureChaos"
+	pb "gitlab.com/devpro_studio/FeatureChaos/sdk/fc_sdk_go/pb"
 )
 
 // FeatureConfig represents one feature configuration cached in SDK
