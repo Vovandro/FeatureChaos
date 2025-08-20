@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option go_package = "gitlab.com/devpro_studio/FeatureChaos/sdk/fc_sdk_go/pb;pb";
+
+package FeatureChaos;
+
+import 'google/protobuf/empty.proto';
+
+message PropsItem {
+    int32 All = 1;
+    string Name = 2;
+    map<string, int32> Item = 3;
+}
+
+message FeatureItem {
+    int32 All = 1;
+    string Name = 2;
+    repeated PropsItem Props = 3;
+}
+
+message GetAllFeatureRequest {
+    string ServiceName = 1;
+    int64 LastVersion = 2;
+}
+
+message SendStatsRequest {
+    string ServiceName = 1;
+    string FeatureName = 2;
+}
+
+message GetFeatureResponse {
+    int64 Version = 1;
+    repeated FeatureItem Features = 2;
+}
+
+service FeatureService {
+    rpc Subscribe(GetAllFeatureRequest) returns (stream GetFeatureResponse);
+    rpc Stats(stream SendStatsRequest) returns (google.protobuf.Empty);
+}

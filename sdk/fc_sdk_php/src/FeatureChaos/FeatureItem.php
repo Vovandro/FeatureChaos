@@ -6,8 +6,8 @@
 namespace FeatureChaos;
 
 use Google\Protobuf\Internal\GPBType;
-use Google\Protobuf\Internal\RepeatedField;
 use Google\Protobuf\Internal\GPBUtil;
+use Google\Protobuf\RepeatedField;
 
 /**
  * Generated from protobuf message <code>FeatureChaos.FeatureItem</code>
@@ -35,7 +35,7 @@ class FeatureItem extends \Google\Protobuf\Internal\Message
      *
      *     @type int $All
      *     @type string $Name
-     *     @type array<\FeatureChaos\PropsItem>|\Google\Protobuf\Internal\RepeatedField $Props
+     *     @type \FeatureChaos\PropsItem[] $Props
      * }
      */
     public function __construct($data = NULL) {
@@ -89,7 +89,7 @@ class FeatureItem extends \Google\Protobuf\Internal\Message
 
     /**
      * Generated from protobuf field <code>repeated .FeatureChaos.PropsItem Props = 3;</code>
-     * @return \Google\Protobuf\Internal\RepeatedField
+     * @return RepeatedField<\FeatureChaos\PropsItem>
      */
     public function getProps()
     {
@@ -98,7 +98,7 @@ class FeatureItem extends \Google\Protobuf\Internal\Message
 
     /**
      * Generated from protobuf field <code>repeated .FeatureChaos.PropsItem Props = 3;</code>
-     * @param array<\FeatureChaos\PropsItem>|\Google\Protobuf\Internal\RepeatedField $var
+     * @param \FeatureChaos\PropsItem[] $var
      * @return $this
      */
     public function setProps($var)

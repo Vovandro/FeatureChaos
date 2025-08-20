@@ -6,8 +6,8 @@
 namespace FeatureChaos;
 
 use Google\Protobuf\Internal\GPBType;
-use Google\Protobuf\Internal\RepeatedField;
 use Google\Protobuf\Internal\GPBUtil;
+use Google\Protobuf\RepeatedField;
 
 /**
  * Generated from protobuf message <code>FeatureChaos.GetFeatureResponse</code>
@@ -30,7 +30,7 @@ class GetFeatureResponse extends \Google\Protobuf\Internal\Message
      *     Optional. Data for populating the Message object.
      *
      *     @type int|string $Version
-     *     @type array<\FeatureChaos\FeatureItem>|\Google\Protobuf\Internal\RepeatedField $Features
+     *     @type \FeatureChaos\FeatureItem[] $Features
      * }
      */
     public function __construct($data = NULL) {
@@ -62,7 +62,7 @@ class GetFeatureResponse extends \Google\Protobuf\Internal\Message
 
     /**
      * Generated from protobuf field <code>repeated .FeatureChaos.FeatureItem Features = 2;</code>
-     * @return \Google\Protobuf\Internal\RepeatedField
+     * @return RepeatedField<\FeatureChaos\FeatureItem>
      */
     public function getFeatures()
     {
@@ -71,7 +71,7 @@ class GetFeatureResponse extends \Google\Protobuf\Internal\Message
 
     /**
      * Generated from protobuf field <code>repeated .FeatureChaos.FeatureItem Features = 2;</code>
-     * @param array<\FeatureChaos\FeatureItem>|\Google\Protobuf\Internal\RepeatedField $var
+     * @param \FeatureChaos\FeatureItem[] $var
      * @return $this
      */
     public function setFeatures($var)
