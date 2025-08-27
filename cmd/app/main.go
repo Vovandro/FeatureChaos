@@ -14,7 +14,6 @@ import (
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ServiceAccessRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/StatsRepository"
-	"gitlab.com/devpro_studio/FeatureChaos/src/service/AdminService"
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/FeatureService"
 	"gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia"
@@ -54,7 +53,6 @@ func main() {
 		PushModule(StatsRepository.New("stats")).
 		PushModule(FeatureService.New("feature")).
 		PushModule(StatsService.New("stats")).
-		PushModule(AdminService.New("admin")).
 		PushModule(FeatureChaos.NewController("grpc_controller")). // inner space
 		PushModule(AdminHTTP.New("http_admin"))
 

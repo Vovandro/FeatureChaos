@@ -8,5 +8,6 @@ type Feature struct {
 	Description string
 	Version     int64
 	Value       int
+	IsDeleted   bool
 	Keys        []FeatureKey
 }

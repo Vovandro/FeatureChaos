@@ -8,9 +8,10 @@ import (
 )
 
 type Interface interface {
-	GetFeaturesList(c context.Context, ids []uuid.UUID) []*db.Feature
+	GetFeatureName(c context.Context, id uuid.UUID) (string, error)
 	ListFeatures(c context.Context) []*db.Feature
-	CreateFeature(c context.Context, name string, description string) (uuid.UUID, error)
-	UpdateFeature(c context.Context, id uuid.UUID, name string, description string) error
+
+	CreateFeature(c context.Context, name string, description string, value int) (uuid.UUID, error)
+	UpdateFeature(c context.Context, id uuid.UUID, name string, description string, value int) error
 	DeleteFeature(c context.Context, id uuid.UUID) error
 }

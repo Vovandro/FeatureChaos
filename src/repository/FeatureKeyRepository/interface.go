@@ -5,13 +5,15 @@ import (
 
 	"github.com/google/uuid"
 	"gitlab.com/devpro_studio/FeatureChaos/src/model/db"
+	"gitlab.com/devpro_studio/Paranoia/pkg/database/postgres"
 )
 
 type Interface interface {
-	GetFeatureKeys(c context.Context, featureIds []uuid.UUID) []*db.FeatureKey
-	CreateKey(c context.Context, featureId uuid.UUID, key string, description string) (uuid.UUID, error)
-	UpdateKey(c context.Context, keyId uuid.UUID, key string, description string) error
+	ListAllKeys(c context.Context) map[uuid.UUID][]*db.FeatureKey
+	ListKeys(c context.Context, featureId uuid.UUID) []*db.FeatureKey
+	CreateKey(c context.Context, featureId uuid.UUID, key string, description string, value int) (uuid.UUID, error)
+	UpdateKey(c context.Context, featureId uuid.UUID, keyId uuid.UUID, key string, description string, value int) error
 	DeleteKey(c context.Context, keyId uuid.UUID) error
-	DeleteByFeatureId(c context.Context, featureId uuid.UUID) error
-	GetFeatureIdByKeyId(c context.Context, keyId uuid.UUID) (uuid.UUID, error)
+
+	DeleteAllByFeatureId(c context.Context, tx postgres.SQLTx, featureId uuid.UUID) error
 }

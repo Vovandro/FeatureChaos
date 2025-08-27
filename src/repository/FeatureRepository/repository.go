@@ -2,11 +2,13 @@ package FeatureRepository
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"gitlab.com/devpro_studio/FeatureChaos/names"
 	"gitlab.com/devpro_studio/FeatureChaos/src/model/db"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ActivationValuesRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/repository"
 	"gitlab.com/devpro_studio/Paranoia/pkg/database/postgres"
@@ -14,35 +16,11 @@ import (
 
 type Repository struct {
 	repository.Mock
-	db     postgres.IPostgres
-	logger interfaces.ILogger
-}
-
-type dbRunner interface {
-	Exec(ctx context.Context, query string, args ...interface{}) error
-	Query(ctx context.Context, query string, args ...interface{}) (postgres.SQLRows, error)
-}
-
-type txRunner struct{ tx pgx.Tx }
-
-func (t txRunner) Exec(ctx context.Context, query string, args ...interface{}) error {
-	_, err := t.tx.Exec(ctx, query, args...)
-	return err
-}
-func (t txRunner) Query(ctx context.Context, query string, args ...interface{}) (postgres.SQLRows, error) {
-	// wrap pgx.Rows into a type that implements Close() error if needed; here we fallback to non-tx for selects
-	return nil, fmt.Errorf("tx runner query not supported in this repository")
-}
-
-const txCtxKey = "pgx_tx"
-
-func (t *Repository) runner(ctx context.Context) dbRunner {
-	if v := ctx.Value(txCtxKey); v != nil {
-		if tx, ok := v.(pgx.Tx); ok && tx != nil {
-			return txRunner{tx: tx}
-		}
-	}
-	return t.db
+	db                         postgres.IPostgres
+	logger                     interfaces.ILogger
+	activationValuesRepository ActivationValuesRepository.Interface
+	featureParamRepository     FeatureParamRepository.Interface
+	featureKeyRepository       FeatureKeyRepository.Interface
 }
 
 func New(name string) *Repository {
@@ -56,50 +34,34 @@ func New(name string) *Repository {
 func (t *Repository) Init(app interfaces.IEngine, _ map[string]interface{}) error {
 	t.logger = app.GetLogger()
 	t.db = app.GetPkg(interfaces.PkgDatabase, "primary").(postgres.IPostgres)
+	t.activationValuesRepository = app.GetModule(interfaces.ModuleRepository, names.ActivationValuesRepository).(ActivationValuesRepository.Interface)
+	t.featureParamRepository = app.GetModule(interfaces.ModuleRepository, names.FeatureParamRepository).(FeatureParamRepository.Interface)
+	t.featureKeyRepository = app.GetModule(interfaces.ModuleRepository, names.FeatureKeyRepository).(FeatureKeyRepository.Interface)
+
 	return nil
 }
 
-func (t *Repository) GetFeaturesList(c context.Context, ids []uuid.UUID) []*db.Feature {
-	rows, err := t.db.Query(c, `
+func (t *Repository) GetFeatureName(c context.Context, id uuid.UUID) (string, error) {
+	row, err := t.db.QueryRow(c, `
 SELECT
-    f.id,
-    f.name,
-    f.description,
-    COALESCE(av.value, 0) AS value,
-    COALESCE(av.v, 0)     AS v
+    f.name
 FROM features AS f
-LEFT JOIN LATERAL (
-    SELECT value, v
-    FROM activation_values av
-    WHERE av.feature_id = f.id
-      AND av.activation_key_id IS NULL
-      AND av.activation_param_id IS NULL
-      AND av.deleted_at IS NULL
-    ORDER BY v DESC
-    LIMIT 1
-) av ON true
-WHERE f.id = ANY($1)
-`, ids)
+WHERE f.id = $1
+  AND f.deleted_at IS NULL
+`, id)
 
 	if err != nil {
 		t.logger.Error(c, err)
-		return nil
-	}
-	defer rows.Close()
-	res := make([]*db.Feature, 0)
-
-	for rows.Next() {
-		var item db.Feature
-		if err := rows.Scan(&item.Id, &item.Name, &item.Description, &item.Value, &item.Version); err != nil {
-			t.logger.Error(c, err)
-			continue
-		}
-		res = append(res, &item)
+		return "", err
 	}
 
-	// rows.Err() is not available in the wrapped driver; errors are surfaced via Scan above.
+	var name string
+	if err := row.Scan(&name); err != nil {
+		t.logger.Error(c, err)
+		return "", err
+	}
 
-	return res
+	return name, nil
 }
 
 func (t *Repository) ListFeatures(c context.Context) []*db.Feature {
@@ -108,19 +70,12 @@ SELECT
     f.id,
     f.name,
     f.description,
-    COALESCE(av.value, 0) AS value,
-    COALESCE(av.v, 0)     AS v
+    av.value AS value,
+    av.v     AS v
 FROM features AS f
-LEFT JOIN LATERAL (
-    SELECT value, v
-    FROM activation_values av
-    WHERE av.feature_id = f.id
-      AND av.activation_key_id IS NULL
-      AND av.activation_param_id IS NULL
-      AND av.deleted_at IS NULL
-    ORDER BY v DESC
-    LIMIT 1
-) av ON true
+JOIN activation_values av ON av.feature_id = f.id
+WHERE av.activation_key_id IS NULL
+  AND f.deleted_at IS NULL
 `)
 
 	if err != nil {
@@ -142,28 +97,120 @@ LEFT JOIN LATERAL (
 	return res
 }
 
-func (t *Repository) CreateFeature(c context.Context, name string, description string) (uuid.UUID, error) {
-	id := uuid.New()
-	err := t.runner(c).Exec(c, `INSERT INTO features (id, name, description) VALUES ($1, $2, $3)`, id, name, description)
+func (t *Repository) CreateFeature(c context.Context, name string, description string, value int) (uuid.UUID, error) {
+	tx, err := t.db.BeginTx(c)
 	if err != nil {
 		t.logger.Error(c, err)
 		return uuid.Nil, err
 	}
+
+	defer tx.Rollback(c)
+
+	// Try to restore an existing soft-deleted feature first
+	row, err := tx.QueryRow(c, `
+UPDATE features
+SET description = $2, deleted_at = NULL
+WHERE name = $1 AND deleted_at IS NOT NULL
+RETURNING id
+`, name, description)
+
+	if err != nil {
+		t.logger.Error(c, err)
+		return uuid.Nil, err
+	}
+
+	var id uuid.UUID
+	if scanErr := row.Scan(&id); scanErr != nil {
+		// No soft-deleted row restored; insert a new one
+		newId := uuid.New()
+		row, err = tx.QueryRow(c, `
+INSERT INTO features (id, name, description)
+VALUES ($1, $2, $3)
+RETURNING id
+`, newId, name, description)
+		if err != nil {
+			t.logger.Error(c, err)
+			return uuid.Nil, err
+		}
+		if scanErr2 := row.Scan(&id); scanErr2 != nil {
+			return uuid.Nil, scanErr2
+		}
+	}
+
+	if _, err := t.activationValuesRepository.InsertValue(c, tx, id, nil, nil, value); err != nil {
+		t.logger.Error(c, err)
+		return uuid.Nil, err
+	}
+
+	if err := tx.Commit(c); err != nil {
+		t.logger.Error(c, err)
+		return uuid.Nil, err
+	}
+
 	return id, nil
 }
 
-func (t *Repository) UpdateFeature(c context.Context, id uuid.UUID, name string, description string) error {
-	err := t.runner(c).Exec(c, `UPDATE features SET name = $2, description = $3 WHERE id = $1`, id, name, description)
+func (t *Repository) UpdateFeature(c context.Context, id uuid.UUID, name string, description string, value int) error {
+	tx, err := t.db.BeginTx(c)
 	if err != nil {
 		t.logger.Error(c, err)
+		return err
 	}
-	return err
+
+	defer tx.Rollback(c)
+
+	err = tx.Exec(c, `UPDATE features SET name = $2, description = $3 WHERE id = $1 AND deleted_at IS NULL`, id, name, description)
+	if err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	if _, err := t.activationValuesRepository.InsertValue(c, tx, id, nil, nil, value); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	if err := tx.Commit(c); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	return nil
 }
 
 func (t *Repository) DeleteFeature(c context.Context, id uuid.UUID) error {
-	err := t.runner(c).Exec(c, `DELETE FROM features WHERE id = $1`, id)
+	tx, err := t.db.BeginTx(c)
+	if err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	defer tx.Rollback(c)
+
+	err = tx.Exec(c, `UPDATE features SET deleted_at = NOW() WHERE id = $1`, id)
 	if err != nil {
 		t.logger.Error(c, err)
 	}
-	return err
+
+	if err := t.activationValuesRepository.DeleteByFeatureId(c, tx, id); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	if err := t.featureParamRepository.DeleteAllByFeatureId(c, tx, id); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	if err := t.featureKeyRepository.DeleteAllByFeatureId(c, tx, id); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	if err := tx.Commit(c); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
+	return nil
 }

@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12\x46\x65\x61tureChaos.proto\x12\x0c\x46\x65\x61tureChaos\x1a\x1bgoogle/protobuf/empty.proto\"\x84\x01\n\tPropsItem\x12\x0b\n\x03\x41ll\x18\x01 \x01(\x05\x12\x0c\n\x04Name\x18\x02 \x01(\t\x12/\n\x04Item\x18\x03 \x03(\x0b\x32!.FeatureChaos.PropsItem.ItemEntry\x1a+\n\tItemEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"P\n\x0b\x46\x65\x61tureItem\x12\x0b\n\x03\x41ll\x18\x01 \x01(\x05\x12\x0c\n\x04Name\x18\x02 \x01(\t\x12&\n\x05Props\x18\x03 \x03(\x0b\x32\x17.FeatureChaos.PropsItem\"@\n\x14GetAllFeatureRequest\x12\x13\n\x0bServiceName\x18\x01 \x01(\t\x12\x13\n\x0bLastVersion\x18\x02 \x01(\x03\"<\n\x10SendStatsRequest\x12\x13\n\x0bServiceName\x18\x01 \x01(\t\x12\x13\n\x0b\x46\x65\x61tureName\x18\x02 \x01(\t\"R\n\x12GetFeatureResponse\x12\x0f\n\x07Version\x18\x01 \x01(\x03\x12+\n\x08\x46\x65\x61tures\x18\x02 \x03(\x0b\x32\x19.FeatureChaos.FeatureItem2\xa8\x01\n\x0e\x46\x65\x61tureService\x12S\n\tSubscribe\x12\".FeatureChaos.GetAllFeatureRequest\x1a .FeatureChaos.GetFeatureResponse0\x01\x12\x41\n\x05Stats\x12\x1e.FeatureChaos.SendStatsRequest\x1a\x16.google.protobuf.Empty(\x01\x42\x0fZ\r/FeatureChaosb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12\x46\x65\x61tureChaos.proto\x12\x0c\x46\x65\x61tureChaos\x1a\x1bgoogle/protobuf/empty.proto\"\x84\x01\n\tPropsItem\x12\x0b\n\x03\x41ll\x18\x01 \x01(\x05\x12\x0c\n\x04Name\x18\x02 \x01(\t\x12/\n\x04Item\x18\x03 \x03(\x0b\x32!.FeatureChaos.PropsItem.ItemEntry\x1a+\n\tItemEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"P\n\x0b\x46\x65\x61tureItem\x12\x0b\n\x03\x41ll\x18\x01 \x01(\x05\x12\x0c\n\x04Name\x18\x02 \x01(\t\x12&\n\x05Props\x18\x03 \x03(\x0b\x32\x17.FeatureChaos.PropsItem\"@\n\x14GetAllFeatureRequest\x12\x13\n\x0bServiceName\x18\x01 \x01(\t\x12\x13\n\x0bLastVersion\x18\x02 \x01(\x03\"<\n\x10SendStatsRequest\x12\x13\n\x0bServiceName\x18\x01 \x01(\t\x12\x13\n\x0b\x46\x65\x61tureName\x18\x02 \x01(\t\"\xc4\x02\n\x12GetFeatureResponse\x12\x0f\n\x07Version\x18\x01 \x01(\x03\x12+\n\x08\x46\x65\x61tures\x18\x02 \x03(\x0b\x32\x19.FeatureChaos.FeatureItem\x12=\n\x07\x44\x65leted\x18\x03 \x03(\x0b\x32,.FeatureChaos.GetFeatureResponse.DeletedItem\x1a\xb0\x01\n\x0b\x44\x65letedItem\x12?\n\x04Kind\x18\x01 \x01(\x0e\x32\x31.FeatureChaos.GetFeatureResponse.DeletedItem.Type\x12\x13\n\x0b\x46\x65\x61tureName\x18\x02 \x01(\t\x12\x0f\n\x07KeyName\x18\x03 \x01(\t\x12\x11\n\tParamName\x18\x04 \x01(\t\"\'\n\x04Type\x12\x0b\n\x07\x46\x45\x41TURE\x10\x00\x12\x07\n\x03KEY\x10\x01\x12\t\n\x05PARAM\x10\x02\x32\xa8\x01\n\x0e\x46\x65\x61tureService\x12S\n\tSubscribe\x12\".FeatureChaos.GetAllFeatureRequest\x1a .FeatureChaos.GetFeatureResponse0\x01\x12\x41\n\x05Stats\x12\x1e.FeatureChaos.SendStatsRequest\x1a\x16.google.protobuf.Empty(\x01\x42\x0fZ\r/FeatureChaosb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -45,8 +45,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETALLFEATUREREQUEST']._serialized_end=346
   _globals['_SENDSTATSREQUEST']._serialized_start=348
   _globals['_SENDSTATSREQUEST']._serialized_end=408
-  _globals['_GETFEATURERESPONSE']._serialized_start=410
-  _globals['_GETFEATURERESPONSE']._serialized_end=492
-  _globals['_FEATURESERVICE']._serialized_start=495
-  _globals['_FEATURESERVICE']._serialized_end=663
+  _globals['_GETFEATURERESPONSE']._serialized_start=411
+  _globals['_GETFEATURERESPONSE']._serialized_end=735
+  _globals['_GETFEATURERESPONSE_DELETEDITEM']._serialized_start=559
+  _globals['_GETFEATURERESPONSE_DELETEDITEM']._serialized_end=735
+  _globals['_GETFEATURERESPONSE_DELETEDITEM_TYPE']._serialized_start=696
+  _globals['_GETFEATURERESPONSE_DELETEDITEM_TYPE']._serialized_end=735
+  _globals['_FEATURESERVICE']._serialized_start=738
+  _globals['_FEATURESERVICE']._serialized_end=906
 # @@protoc_insertion_point(module_scope)

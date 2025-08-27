@@ -46,7 +46,7 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 			return nil
 
 		case <-ticker.C:
-			features := t.featureService.GetNewFeature(response.Context(), request.ServiceName, lastVersion)
+			version, features := t.featureService.GetNewFeature(response.Context(), request.ServiceName, lastVersion)
 
 			if len(features) > 0 {
 				resp := &GetFeatureResponse{
@@ -54,10 +54,6 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 				}
 
 				for _, feature := range features {
-					if feature.Version > lastVersion {
-						lastVersion = feature.Version
-					}
-
 					props := make([]*PropsItem, len(feature.Keys))
 
 					for i, key := range feature.Keys {
@@ -81,7 +77,7 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 					})
 				}
 
-				resp.Version = lastVersion
+				resp.Version = version
 
 				err := response.Send(resp)
 				if err != nil {

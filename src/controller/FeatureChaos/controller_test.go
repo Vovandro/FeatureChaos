@@ -15,7 +15,9 @@ import (
 
 type fakeFeatureSvc struct{ resp []*dto.Feature }
 
-func (f *fakeFeatureSvc) GetNewFeature(context.Context, string, int64) []*dto.Feature { return f.resp }
+func (f *fakeFeatureSvc) GetNewFeature(context.Context, string, int64) (int64, []*dto.Feature) {
+	return 0, f.resp
+}
 
 type fakeStatsSvc struct{ called int }
 

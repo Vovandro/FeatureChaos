@@ -3,14 +3,17 @@ package ActivationValuesRepository
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"gitlab.com/devpro_studio/FeatureChaos/src/model/db"
+	"gitlab.com/devpro_studio/FeatureChaos/src/model/dto"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/repository"
 	"gitlab.com/devpro_studio/Paranoia/pkg/cache/redis"
 	"gitlab.com/devpro_studio/Paranoia/pkg/database/postgres"
+	"gitlab.com/devpro_studio/go_utils/dataUtils"
 )
 
 type Repository struct {
@@ -18,32 +21,6 @@ type Repository struct {
 	db     postgres.IPostgres
 	cache  redis.IRedis
 	logger interfaces.ILogger
-}
-
-type dbRunner interface {
-	Exec(ctx context.Context, query string, args ...interface{}) error
-	QueryRow(ctx context.Context, query string, args ...interface{}) (postgres.SQLRow, error)
-}
-
-type txRunner struct{ tx pgx.Tx }
-
-func (t txRunner) Exec(ctx context.Context, query string, args ...interface{}) error {
-	_, err := t.tx.Exec(ctx, query, args...)
-	return err
-}
-func (t txRunner) QueryRow(ctx context.Context, query string, args ...interface{}) (postgres.SQLRow, error) {
-	return t.tx.QueryRow(ctx, query, args...), nil
-}
-
-const txCtxKey = "pgx_tx"
-
-func (t *Repository) runner(ctx context.Context) dbRunner {
-	if v := ctx.Value(txCtxKey); v != nil {
-		if tx, ok := v.(pgx.Tx); ok && tx != nil {
-			return txRunner{tx: tx}
-		}
-	}
-	return t.db
 }
 
 func New(name string) *Repository {
@@ -54,14 +31,16 @@ func (t *Repository) Init(app interfaces.IEngine, _ map[string]interface{}) erro
 	t.logger = app.GetLogger()
 	t.db = app.GetPkg(interfaces.PkgDatabase, "primary").(postgres.IPostgres)
 	t.cache = app.GetPkg(interfaces.PkgCache, "primary").(redis.IRedis)
+
 	return nil
 }
 
-func (t *Repository) InsertValue(c context.Context, featureId uuid.UUID, keyId *uuid.UUID, paramId *uuid.UUID, value int) (int64, error) {
-	v, err := t.nextVersion(c, featureId)
+func (t *Repository) InsertValue(c context.Context, tx postgres.SQLTx, featureId uuid.UUID, keyId *uuid.UUID, paramId *uuid.UUID, value int) (int64, error) {
+	v, err := t.nextVersion(c, tx)
 	if err != nil {
 		return 0, err
 	}
+
 	var key any
 	var param any
 	if keyId != nil {
@@ -70,31 +49,115 @@ func (t *Repository) InsertValue(c context.Context, featureId uuid.UUID, keyId *
 	if paramId != nil {
 		param = *paramId
 	}
-	err = t.runner(c).Exec(c, `INSERT INTO activation_values (id, feature_id, activation_key_id, activation_param_id, value, deleted_at, v)
-VALUES ($1, $2, $3, $4, $5, NULL, $6)`, uuid.New(), featureId, key, param, value, v)
+
+	// Try to restore/update existing row (handles soft-deleted as well)
+	var updatedId uuid.UUID
+	row, err := tx.QueryRow(c, `
+UPDATE activation_values
+SET value = $4, deleted_at = NULL, v = $5
+WHERE feature_id = $1
+  AND activation_key_id IS NOT DISTINCT FROM $2
+  AND activation_param_id IS NOT DISTINCT FROM $3
+RETURNING id
+`, featureId, key, param, value, v)
 	if err != nil {
 		return 0, err
 	}
-	if bumpErr := t.bumpGlobalVersion(c); bumpErr != nil {
+	if scanErr := row.Scan(&updatedId); scanErr == nil {
+		if bumpErr := t.bumpGlobalVersion(c, v); bumpErr != nil {
+			t.logger.Error(c, fmt.Errorf("bump global version: %w", bumpErr))
+		}
+		return v, nil
+	}
+
+	// If nothing was updated, insert a new row; ON CONFLICT covers races among active rows
+	err = tx.Exec(c, `
+INSERT INTO activation_values (id, feature_id, activation_key_id, activation_param_id, value, deleted_at, v)
+VALUES ($1, $2, $3, $4, $5, NULL, $6)
+ON CONFLICT (
+    feature_id,
+    COALESCE(activation_key_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    COALESCE(activation_param_id, '00000000-0000-0000-0000-000000000000'::uuid)
+) WHERE (deleted_at IS NULL)
+DO UPDATE SET value = EXCLUDED.value, deleted_at = NULL, v = EXCLUDED.v
+`, uuid.New(), featureId, key, param, value, v)
+	if err != nil {
+		return 0, err
+	}
+
+	if bumpErr := t.bumpGlobalVersion(c, v); bumpErr != nil {
 		t.logger.Error(c, fmt.Errorf("bump global version: %w", bumpErr))
 	}
+
 	return v, nil
 }
 
-func (t *Repository) DeleteByFeatureId(c context.Context, featureId uuid.UUID) error {
-	return t.runner(c).Exec(c, `DELETE FROM activation_values WHERE feature_id = $1`, featureId)
+func (t *Repository) DeleteByFeatureId(c context.Context, tx postgres.SQLTx, featureId uuid.UUID) error {
+	v, err := t.nextVersion(c, tx)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Exec(c, `UPDATE activation_values SET deleted_at = NOW(), v = $1 WHERE feature_id = $2`, v, featureId)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Exec(c, `DELETE FROM activation_values WHERE feature_id = $1 AND activation_key_id IS NOT NULL`, featureId)
+	if err != nil {
+		return err
+	}
+
+	if bumpErr := t.bumpGlobalVersion(c, v); bumpErr != nil {
+		t.logger.Error(c, fmt.Errorf("bump global version: %w", bumpErr))
+	}
+
+	return nil
 }
 
-func (t *Repository) DeleteByKeyId(c context.Context, keyId uuid.UUID) error {
-	return t.runner(c).Exec(c, `DELETE FROM activation_values WHERE activation_key_id = $1`, keyId)
+func (t *Repository) DeleteByKeyId(c context.Context, tx postgres.SQLTx, keyId uuid.UUID) error {
+	v, err := t.nextVersion(c, tx)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Exec(c, `UPDATE activation_values SET deleted_at = NOW(), v = $1 WHERE activation_key_id = $2`, v, keyId)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Exec(c, `DELETE FROM activation_values WHERE activation_key_id = $1 AND activation_param_id IS NOT NULL`, keyId)
+	if err != nil {
+		return err
+	}
+
+	if bumpErr := t.bumpGlobalVersion(c, v); bumpErr != nil {
+		t.logger.Error(c, fmt.Errorf("bump global version: %w", bumpErr))
+	}
+
+	return nil
 }
 
-func (t *Repository) DeleteByParamId(c context.Context, paramId uuid.UUID) error {
-	return t.runner(c).Exec(c, `DELETE FROM activation_values WHERE activation_param_id = $1`, paramId)
+func (t *Repository) DeleteByParamId(c context.Context, tx postgres.SQLTx, paramId uuid.UUID) error {
+	v, err := t.nextVersion(c, tx)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Exec(c, `UPDATE activation_values SET deleted_at = NOW(), v = $1 WHERE activation_param_id = $2`, v, paramId)
+	if err != nil {
+		return err
+	}
+
+	if bumpErr := t.bumpGlobalVersion(c, v); bumpErr != nil {
+		t.logger.Error(c, fmt.Errorf("bump global version: %w", bumpErr))
+	}
+
+	return nil
 }
 
-func (t *Repository) nextVersion(c context.Context, featureId uuid.UUID) (int64, error) {
-	row, err := t.runner(c).QueryRow(c, `SELECT COALESCE(MAX(v), 0) FROM activation_values WHERE feature_id = $1`, featureId)
+func (t *Repository) nextVersion(c context.Context, tx postgres.SQLTx) (int64, error) {
+	row, err := tx.QueryRow(c, `SELECT COALESCE(MAX(v), 0) FROM activation_values`)
 	if err != nil {
 		return 0, err
 	}
@@ -105,12 +168,107 @@ func (t *Repository) nextVersion(c context.Context, featureId uuid.UUID) (int64,
 	return max + 1, nil
 }
 
-func (t *Repository) bumpGlobalVersion(c context.Context) error {
-	vStr, err := t.cache.Get(c, "feature_version")
-	if err != nil || vStr == "" {
-		return t.cache.Set(c, "feature_version", 1, 24*time.Hour)
+func (t *Repository) bumpGlobalVersion(c context.Context, v int64) error {
+	return t.cache.Set(c, "feature_version", v, 365*24*time.Hour)
+}
+
+func (t *Repository) GetNewByServiceName(c context.Context, serviceName string, lastVersion int64) (int64, []*dto.Feature, error) {
+	cachedVersionStr, err := t.cache.Get(c, "feature_version")
+	if err != nil {
+		cachedVersionStr = "-1"
 	}
-	var cur int
-	_, _ = fmt.Sscanf(vStr, "%d", &cur)
-	return t.cache.Set(c, "feature_version", cur+1, 24*time.Hour)
+
+	cachedVersion, _ := strconv.ParseInt(cachedVersionStr, 10, 64)
+
+	if cachedVersion <= lastVersion {
+		return cachedVersion, nil, nil
+	}
+
+	rows, err := t.db.Query(c, `
+	SELECT av.feature_id, f.name, av.activation_key_id, ak.name, av.activation_param_id, ap.name, av.value, av.v, av.deleted_at
+	FROM activation_values av
+	JOIN service_access sa ON sa.feature_id = av.feature_id
+	JOIN services s ON s.id = sa.service_id
+	JOIN features f ON f.id = av.feature_id
+	JOIN activation_keys ak ON ak.id = av.activation_key_id
+	JOIN activation_params ap ON ap.id = av.activation_param_id
+	WHERE s.name = $1 AND av.v > $2
+`, serviceName, lastVersion)
+
+	if err != nil {
+		t.logger.Error(c, err)
+		return lastVersion, nil, err
+	}
+
+	defer rows.Close()
+	values := make([]db.ActivationValues, 0)
+
+	for rows.Next() {
+		var f db.ActivationValues
+		if err := rows.Scan(&f.FeatureID, &f.FeatureName, &f.KeyId, &f.KeyName, &f.ParamId, &f.ParamName, &f.Value, &f.V, &f.DeletedAt); err != nil {
+			t.logger.Error(c, err)
+			continue
+		}
+
+		values = append(values, f)
+	}
+
+	params := make(map[uuid.UUID][]dto.FeatureParam)
+
+	for _, v := range values {
+		if v.ParamId != nil {
+			if _, ok := params[*v.ParamId]; !ok {
+				params[*v.ParamId] = make([]dto.FeatureParam, 0)
+			}
+			params[*v.ParamId] = append(params[*v.ParamId], dto.FeatureParam{
+				Id:        *v.ParamId,
+				Name:      *v.ParamName,
+				Value:     v.Value,
+				IsDeleted: v.DeletedAt != nil,
+			})
+		}
+	}
+
+	keys := make(map[uuid.UUID][]dto.FeatureKey)
+
+	for _, v := range values {
+		if v.KeyId != nil && v.ParamId == nil {
+			if _, ok := keys[v.FeatureID]; !ok {
+				keys[v.FeatureID] = make([]dto.FeatureKey, 0)
+			}
+			featureKey := dto.FeatureKey{
+				Id:        *v.KeyId,
+				Key:       *v.KeyName,
+				Value:     int(v.Value),
+				IsDeleted: v.DeletedAt != nil,
+			}
+
+			if _, ok := params[*v.KeyId]; ok {
+				featureKey.Params = params[*v.KeyId]
+			}
+
+			keys[v.FeatureID] = append(keys[v.FeatureID], featureKey)
+		}
+	}
+
+	features := make(map[uuid.UUID]*dto.Feature)
+
+	for _, v := range values {
+		if v.KeyId == nil {
+			feature := &dto.Feature{
+				ID:        v.FeatureID,
+				Name:      v.FeatureName,
+				Value:     v.Value,
+				IsDeleted: v.DeletedAt != nil,
+			}
+
+			if _, ok := keys[v.FeatureID]; ok {
+				feature.Keys = keys[v.FeatureID]
+			}
+
+			features[v.FeatureID] = feature
+		}
+	}
+
+	return cachedVersion, dataUtils.MapValues(features), nil
 }

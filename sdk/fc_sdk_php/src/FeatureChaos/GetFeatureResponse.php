@@ -22,6 +22,10 @@ class GetFeatureResponse extends \Google\Protobuf\Internal\Message
      * Generated from protobuf field <code>repeated .FeatureChaos.FeatureItem Features = 2;</code>
      */
     private $Features;
+    /**
+     * Generated from protobuf field <code>repeated .FeatureChaos.GetFeatureResponse.DeletedItem Deleted = 3;</code>
+     */
+    private $Deleted;
 
     /**
      * Constructor.
@@ -31,6 +35,7 @@ class GetFeatureResponse extends \Google\Protobuf\Internal\Message
      *
      *     @type int|string $Version
      *     @type \FeatureChaos\FeatureItem[] $Features
+     *     @type \FeatureChaos\GetFeatureResponse\DeletedItem[] $Deleted
      * }
      */
     public function __construct($data = NULL) {
@@ -78,6 +83,28 @@ class GetFeatureResponse extends \Google\Protobuf\Internal\Message
     {
         $arr = GPBUtil::checkRepeatedField($var, \Google\Protobuf\Internal\GPBType::MESSAGE, \FeatureChaos\FeatureItem::class);
         $this->Features = $arr;
+
+        return $this;
+    }
+
+    /**
+     * Generated from protobuf field <code>repeated .FeatureChaos.GetFeatureResponse.DeletedItem Deleted = 3;</code>
+     * @return RepeatedField<\FeatureChaos\GetFeatureResponse\DeletedItem>
+     */
+    public function getDeleted()
+    {
+        return $this->Deleted;
+    }
+
+    /**
+     * Generated from protobuf field <code>repeated .FeatureChaos.GetFeatureResponse.DeletedItem Deleted = 3;</code>
+     * @param \FeatureChaos\GetFeatureResponse\DeletedItem[] $var
+     * @return $this
+     */
+    public function setDeleted($var)
+    {
+        $arr = GPBUtil::checkRepeatedField($var, \Google\Protobuf\Internal\GPBType::MESSAGE, \FeatureChaos\GetFeatureResponse\DeletedItem::class);
+        $this->Deleted = $arr;
 
         return $this;
     }

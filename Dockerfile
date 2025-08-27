@@ -34,7 +34,7 @@ COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY migrations ./migrations
 
 # For TLS DB connections if using postgres URLs with sslmode != disable
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates make
 
 WORKDIR /app
 

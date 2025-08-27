@@ -1,27 +1,25 @@
-async function fetchKeys(id){
-  const res = await fetch('/api/features/'+id+'/keys');
-  if(!res.ok){ return [] }
-  return await res.json();
-}
+let __state = { features: [], services: [] };
 
 async function fetchFeatures(){
   const res = await fetch('/api/features');
   const data = await res.json();
+  __state.features = Array.isArray(data) ? data : [];
   const tbody = document.getElementById('features');
   tbody.innerHTML='';
   const allServices = await fetchServices();
+  __state.services = Array.isArray(allServices) ? allServices : [];
   renderServicesSidebar(allServices);
   const filter = (document.getElementById('f-search')?.value||'').toLowerCase();
-  const list = (data||[]).filter(f => !filter || (f.name||'').toLowerCase().includes(filter) || (f.description||'').toLowerCase().includes(filter));
+  const list = (__state.features||[]).filter(f => !filter || (f.name||'').toLowerCase().includes(filter) || (f.description||'').toLowerCase().includes(filter));
   for(const f of list){
     const tr = document.createElement('tr');
-    const keys = await fetchKeys(f.id);
+    const keys = Array.isArray(f.keys) ? f.keys : [];
     const serviceIds = new Set((f.services||[]).map(s=>s.id));
     const availableServices = allServices.filter(s=>!serviceIds.has(s.id));
     const keysHtmlResolved = [];
-    for(const k of (keys||[])){
-      const params = await fetchParams(k.id);
-      const paramsHtml = (params||[]).map(p=>
+    for(const k of keys){
+      const params = Array.isArray(k.params) ? k.params : [];
+      const paramsHtml = params.map(p=>
         '<div class="params">'
         + p.name + ' = '
         + '<input type="number" id="p-value-'+p.id+'" value="'+p.value+'" class="value-input mini" min="0" max="100"/> % '
@@ -30,8 +28,8 @@ async function fetchFeatures(){
         + '</div>'
       ).join('');
       keysHtmlResolved.push('<div class="keys">'
-        + '<div class="k-header"><span class="k-title">'+k.key+'</span> = '
-        + '<input type="number" id="k-value-'+k.id+'" value="'+k.value+'" class="value-input mini" min="0" max="100"/> % '
+        + '<div class="k-header"><span class="k-title">'+(k.name||'')+'</span> = '
+        + '<input type="number" id="k-value-'+k.id+'" value="'+(k.value||0)+'" class="value-input mini" min="0" max="100"/> % '
         + '<button class="mini" onclick="setKeyValue(\''+k.id+'\')">Save</button> '
         + '<button class="mini" onclick="deleteKey(\''+k.id+'\')">✖</button>'
         + '</div>'
@@ -53,7 +51,7 @@ async function fetchFeatures(){
 
     tr.innerHTML = '<td><div><b>' + f.name + '</b></div></td>'
       + '<td>' + (f.description||'') + '</td>'
-      + '<td><input type="number" id="val-' + f.id + '" value="' + f.value + '" class="value-input" min="0" max="100"/> %</td>'
+      + '<td><input type="number" id="val-' + f.id + '" value="' + (f.value||0) + '" class="value-input" min="0" max="100"/> %</td>'
       + '<td>' + usedBadge + '</td>'
       + '<td>' + svcHtml + '</td>'
       + '<td>' + keysHtmlResolved.join('') + '<div class="row"><input id="k-name-'+f.id+'" placeholder="key name" style="width:140px"/> '
@@ -75,10 +73,25 @@ function onSearchInput(){
   fetchFeatures();
 }
 
-async function fetchParams(id){
-  const res = await fetch('/api/keys/'+id+'/params');
-  if(!res.ok){ return [] }
-  return await res.json();
+// helper lookups
+function findFeatureById(id){
+  return (__state.features||[]).find(f=>f.id===id);
+}
+function findFeatureAndKeyByKeyId(keyId){
+  for(const f of (__state.features||[])){
+    const k = (f.keys||[]).find(x=>x.id===keyId);
+    if(k){ return {feature:f, key:k}; }
+  }
+  return {feature:null, key:null};
+}
+function findParamContext(paramId){
+  for(const f of (__state.features||[])){
+    for(const k of (f.keys||[])){
+      const p = (k.params||[]).find(x=>x.id===paramId);
+      if(p){ return {feature:f, key:k, param:p}; }
+    }
+  }
+  return {feature:null, key:null, param:null};
 }
 
 async function createFeature(){
@@ -92,14 +105,20 @@ async function createFeature(){
 async function setValue(id){
   let v = parseInt(document.getElementById('val-'+id).value||'0',10);
   v = clampPercent(v);
-  const res = await fetch('/api/features/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v})});
+  const f = findFeatureById(id);
+  if(!f){ return }
+  const body = { name: f.name||'', description: f.description||'', value: v };
+  const res = await fetch('/api/features/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   if(res.ok){ await fetchFeatures(); }
 }
 
 async function setKeyValue(id){
   let v = parseInt(document.getElementById('k-value-'+id).value||'0',10);
   v = clampPercent(v);
-  const res = await fetch('/api/keys/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v})});
+  const ctx = findFeatureAndKeyByKeyId(id);
+  if(!ctx.feature || !ctx.key){ return }
+  const body = { feature_id: ctx.feature.id, key: ctx.key.name||'', description: ctx.key.description||'', value: v };
+  const res = await fetch('/api/keys/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   if(res.ok){ await fetchFeatures(); }
 }
 
@@ -115,10 +134,11 @@ async function createKey(featureId){
   value = clampPercent(value);
   const description = document.getElementById('k-desc-'+featureId).value.trim();
   if(!key){return}
-  const res1 = await fetch('/api/features/'+featureId+'/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, description})});
+  const res1 = await fetch('/api/features/'+featureId+'/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, description, value})});
   if(res1.ok){
-    const id = (await res1.json()).id;
-    await fetch('/api/keys/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value})});
+    document.getElementById(`k-name-${featureId}`).value='';
+    document.getElementById(`k-val-${featureId}`).value='';
+    document.getElementById(`k-desc-${featureId}`).value='';
     await fetchFeatures();
   }
 }
@@ -186,10 +206,12 @@ async function createParam(keyId){
   let value = parseInt(document.getElementById('p-val-'+keyId).value||'0',10);
   value = clampPercent(value);
   if(!name){return}
-  const res1 = await fetch('/api/keys/'+keyId+'/params',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+  const ctx = findFeatureAndKeyByKeyId(keyId);
+  if(!ctx.feature){ return }
+  const res1 = await fetch('/api/keys/'+keyId+'/params',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({feature_id: ctx.feature.id, name, value})});
   if(res1.ok){
-    const id = (await res1.json()).id;
-    await fetch('/api/params/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value})});
+    document.getElementById('p-name-'+keyId).value='';
+    document.getElementById('p-val-'+keyId).value='';
     await fetchFeatures();
   }
 }
@@ -197,7 +219,10 @@ async function createParam(keyId){
 async function setParamValue(id){
   let v = parseInt(document.getElementById('p-value-'+id).value||'0',10);
   v = clampPercent(v);
-  const res = await fetch('/api/params/'+id+'/value',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v})});
+  const ctx = findParamContext(id);
+  if(!ctx.feature || !ctx.key || !ctx.param){ return }
+  const body = { feature_id: ctx.feature.id, key_id: ctx.key.id, name: ctx.param.name||'', value: v };
+  const res = await fetch('/api/params/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   if(res.ok){ await fetchFeatures(); }
 }
 

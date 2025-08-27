@@ -7,5 +7,6 @@ type FeatureKey struct {
 	Key         string
 	Description string
 	Value       int
+	IsDeleted   bool
 	Params      []FeatureParam
 }
