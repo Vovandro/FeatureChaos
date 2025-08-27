@@ -56,7 +56,6 @@ async function fetchFeatures(){
       + '<td>' + svcHtml + '</td>'
       + '<td>' + keysHtmlResolved.join('') + '<div class="row"><input id="k-name-'+f.id+'" placeholder="key name" style="width:140px"/> '
       + '<input type="number" id="k-val-'+f.id+'" placeholder="0" style="width:80px" min="0" max="100"/> % '
-      + '<input id="k-desc-'+f.id+'" placeholder="description" style="width:160px"/> '
       + '<button onclick="createKey(\''+f.id+'\')">Add key</button></div></td>'
       + '<td>'
       + '  <div class="actions">'
@@ -117,7 +116,7 @@ async function setKeyValue(id){
   v = clampPercent(v);
   const ctx = findFeatureAndKeyByKeyId(id);
   if(!ctx.feature || !ctx.key){ return }
-  const body = { feature_id: ctx.feature.id, key: ctx.key.name||'', description: ctx.key.description||'', value: v };
+  const body = { feature_id: ctx.feature.id, key: ctx.key.name||'', value: v };
   const res = await fetch('/api/keys/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   if(res.ok){ await fetchFeatures(); }
 }
@@ -132,13 +131,11 @@ async function createKey(featureId){
   const key = document.getElementById('k-name-'+featureId).value.trim();
   let value = parseInt(document.getElementById('k-val-'+featureId).value||'0',10);
   value = clampPercent(value);
-  const description = document.getElementById('k-desc-'+featureId).value.trim();
   if(!key){return}
-  const res1 = await fetch('/api/features/'+featureId+'/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, description, value})});
+  const res1 = await fetch('/api/features/'+featureId+'/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, value})});
   if(res1.ok){
     document.getElementById(`k-name-${featureId}`).value='';
     document.getElementById(`k-val-${featureId}`).value='';
-    document.getElementById(`k-desc-${featureId}`).value='';
     await fetchFeatures();
   }
 }

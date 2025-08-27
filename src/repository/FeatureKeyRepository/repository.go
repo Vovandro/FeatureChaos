@@ -168,7 +168,7 @@ func (t *Repository) UpdateKey(c context.Context, featureId uuid.UUID, keyId uui
 
 	defer tx.Rollback(c)
 
-	err = tx.Exec(c, `UPDATE activation_keys SET key = $2, description = $3 WHERE id = $1 AND deleted_at IS NULL`, keyId, key, description)
+	err = tx.Exec(c, `UPDATE activation_keys SET key = $2, description = CASE WHEN $3 = '' THEN description ELSE $3 END WHERE id = $1 AND deleted_at IS NULL`, keyId, key, description)
 	if err != nil {
 		t.logger.Error(c, err)
 		return err

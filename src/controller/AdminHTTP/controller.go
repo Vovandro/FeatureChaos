@@ -160,7 +160,7 @@ func (t *Controller) listFeatures(c context.Context, ctx httpSrv.ICtx) {
 			svcResp[i] = struct {
 				ID   string "json:\"id\""
 				Name string "json:\"name\""
-			}{ID: s.ID.String(), Name: s.Name}
+			}{ID: s.ServiceId.String(), Name: s.Name}
 		}
 
 		keys, ok := allKeys[it.Id]

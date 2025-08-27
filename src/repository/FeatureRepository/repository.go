@@ -192,6 +192,12 @@ func (t *Repository) DeleteFeature(c context.Context, id uuid.UUID) error {
 		t.logger.Error(c, err)
 	}
 
+	// Remove all service bindings for the feature
+	if err := tx.Exec(c, `DELETE FROM service_access WHERE feature_id = $1`, id); err != nil {
+		t.logger.Error(c, err)
+		return err
+	}
+
 	if err := t.activationValuesRepository.DeleteByFeatureId(c, tx, id); err != nil {
 		t.logger.Error(c, err)
 		return err
