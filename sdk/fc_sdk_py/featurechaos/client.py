@@ -149,6 +149,19 @@ class FeatureChaosClient:
         resp.name = "GetFeatureResponse"
         f = resp.field.add(); f.name = "Version"; f.number = 1; f.label = 1; f.type = 3
         f = resp.field.add(); f.name = "Features"; f.number = 2; f.label = 3; f.type = 11; f.type_name = ".FeatureChaos.FeatureItem"
+        # Deleted nested message
+        deleted_msg = resp.nested_type.add(); deleted_msg.name = "DeletedItem"
+        # enum Type
+        enum_type = deleted_msg.enum_type.add(); enum_type.name = "Type"
+        ev = enum_type.value.add(); ev.name = "FEATURE"; ev.number = 0
+        ev = enum_type.value.add(); ev.name = "KEY"; ev.number = 1
+        ev = enum_type.value.add(); ev.name = "PARAM"; ev.number = 2
+        f = deleted_msg.field.add(); f.name = "Kind"; f.number = 1; f.label = 1; f.type = 14; f.type_name = ".FeatureChaos.GetFeatureResponse.DeletedItem.Type"
+        f = deleted_msg.field.add(); f.name = "FeatureName"; f.number = 2; f.label = 1; f.type = 9
+        f = deleted_msg.field.add(); f.name = "KeyName"; f.number = 3; f.label = 1; f.type = 9
+        f = deleted_msg.field.add(); f.name = "ParamName"; f.number = 4; f.label = 1; f.type = 9
+        # top-level field
+        f = resp.field.add(); f.name = "Deleted"; f.number = 3; f.label = 3; f.type = 11; f.type_name = ".FeatureChaos.GetFeatureResponse.DeletedItem"
 
         # Service
         svc = file_desc.service.add(); svc.name = "FeatureService"
@@ -185,12 +198,13 @@ class FeatureChaosClient:
                 for resp in stream:
                     version = getattr(resp, "Version", 0)
                     features = getattr(resp, "Features", [])
-                    self._apply_update(version, features)
+                    deletions = getattr(resp, "Deleted", [])
+                    self._apply_update(version, features, deletions)
             except Exception:
                 time.sleep(min(10.0, backoff))
                 backoff = min(10.0, backoff * 2)
 
-    def _apply_update(self, version: int, features):
+    def _apply_update(self, version: int, features, deletions):
         with self._lock:
             for f in features:
                 name = getattr(f, "Name", "")
@@ -203,6 +217,27 @@ class FeatureChaosClient:
                     items = dict(getattr(p, "Item", {}))
                     keys[kname] = {"all": kall, "items": {str(k): int(v) for k, v in items.items()}}
                 self._features[name] = {"all": allp, "keys": keys}
+            # apply deletions (FEATURE=0, KEY=1, PARAM=2)
+            for d in (deletions or []):
+                kind = int(getattr(d, "Kind", 0))
+                fn = str(getattr(d, "FeatureName", ""))
+                if kind == 0:
+                    self._features.pop(fn, None)
+                    continue
+                if kind == 1:
+                    kn = str(getattr(d, "KeyName", ""))
+                    feat = self._features.get(fn)
+                    if feat:
+                        feat.get("keys", {}).pop(kn, None)
+                    continue
+                if kind == 2:
+                    kn = str(getattr(d, "KeyName", ""))
+                    pn = str(getattr(d, "ParamName", ""))
+                    feat = self._features.get(fn)
+                    if feat:
+                        key_cfg = feat.get("keys", {}).get(kn)
+                        if key_cfg:
+                            key_cfg.get("items", {}).pop(pn, None)
             if version > self._last_version:
                 self._last_version = version
         cb = self._options.on_update

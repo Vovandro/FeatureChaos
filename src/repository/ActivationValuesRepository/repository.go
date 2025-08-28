@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gitlab.com/devpro_studio/FeatureChaos/names"
 	"gitlab.com/devpro_studio/FeatureChaos/src/model/db"
 	"gitlab.com/devpro_studio/FeatureChaos/src/model/dto"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
@@ -29,8 +30,8 @@ func New(name string) *Repository {
 
 func (t *Repository) Init(app interfaces.IEngine, _ map[string]interface{}) error {
 	t.logger = app.GetLogger()
-	t.db = app.GetPkg(interfaces.PkgDatabase, "primary").(postgres.IPostgres)
-	t.cache = app.GetPkg(interfaces.PkgCache, "primary").(redis.IRedis)
+	t.db = app.GetPkg(interfaces.PkgDatabase, names.DatabasePrimary).(postgres.IPostgres)
+	t.cache = app.GetPkg(interfaces.PkgCache, names.CacheRedis).(redis.IRedis)
 
 	return nil
 }

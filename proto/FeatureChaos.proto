@@ -31,6 +31,19 @@ message SendStatsRequest {
 message GetFeatureResponse {
     int64 Version = 1;
     repeated FeatureItem Features = 2;
+    // Explicit deletions since last version
+    message DeletedItem {
+        enum Type {
+            FEATURE = 0;
+            KEY = 1;
+            PARAM = 2;
+        }
+        Type Kind = 1;
+        string FeatureName = 2;
+        string KeyName = 3;     // for KEY and PARAM deletions
+        string ParamName = 4;   // for PARAM deletions
+    }
+    repeated DeletedItem Deleted = 3;
 }
 
 service FeatureService {

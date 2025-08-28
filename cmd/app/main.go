@@ -6,8 +6,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	AdminHTTP "gitlab.com/devpro_studio/FeatureChaos/src/controller/AdminHTTP"
+	"gitlab.com/devpro_studio/FeatureChaos/names"
+	"gitlab.com/devpro_studio/FeatureChaos/src/controller/AdminHTTP"
 	"gitlab.com/devpro_studio/FeatureChaos/src/controller/FeatureChaos"
+	"gitlab.com/devpro_studio/FeatureChaos/src/controller/PublicHTTP"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ActivationValuesRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
@@ -40,21 +42,32 @@ func main() {
 		s.PushPkg(std_log.New("std"))
 	}
 
-	s.PushPkg(memory.New("secondary")).
-		PushPkg(redis.New("primary")).
-		PushPkg(postgres.New("primary")).
-		PushPkg(grpc.New("grpc")).
-		PushPkg(httpSrv.New("http")).
-		PushModule(FeatureRepository.New("feature")).
-		PushModule(FeatureParamRepository.New("feature_param")).
-		PushModule(FeatureKeyRepository.New("feature_key")).
-		PushModule(ActivationValuesRepository.New("activation_values")).
-		PushModule(ServiceAccessRepository.New("service_access")).
-		PushModule(StatsRepository.New("stats")).
-		PushModule(FeatureService.New("feature")).
-		PushModule(StatsService.New("stats")).
-		PushModule(FeatureChaos.NewController("grpc_controller")). // inner space
-		PushModule(AdminHTTP.New("http_admin"))
+	s.PushPkg(memory.New(names.CacheMemory)).
+		PushPkg(redis.New(names.CacheRedis)).
+		PushPkg(postgres.New(names.DatabasePrimary)).
+		PushModule(FeatureRepository.New(names.FeatureRepository)).
+		PushModule(FeatureParamRepository.New(names.FeatureParamRepository)).
+		PushModule(FeatureKeyRepository.New(names.FeatureKeyRepository)).
+		PushModule(ActivationValuesRepository.New(names.ActivationValuesRepository)).
+		PushModule(ServiceAccessRepository.New(names.ServiceAccessRepository)).
+		PushModule(StatsRepository.New(names.StatsRepository)).
+		PushModule(FeatureService.New(names.FeatureService)).
+		PushModule(StatsService.New(names.StatsService))
+
+	if len(cfg.GetConfigItem(interfaces.PkgServer, names.HttpPublicServer)) > 0 {
+		s.PushPkg(httpSrv.New(names.HttpPublicServer)).
+			PushModule(PublicHTTP.New(names.PublicHTTP))
+	}
+
+	if len(cfg.GetConfigItem(interfaces.PkgServer, names.GrpcServer)) > 0 {
+		s.PushPkg(grpc.New(names.GrpcServer)).
+			PushModule(FeatureChaos.NewController(names.FeatureChaosController))
+	}
+
+	if len(cfg.GetConfigItem(interfaces.PkgServer, names.HttpServer)) > 0 {
+		s.PushPkg(httpSrv.New(names.HttpServer)).
+			PushModule(AdminHTTP.New(names.AdminHTTP))
+	}
 
 	err := s.Init()
 	if err != nil {

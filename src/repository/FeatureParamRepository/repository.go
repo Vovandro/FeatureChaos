@@ -29,7 +29,7 @@ func New(name string) *Repository {
 
 func (t *Repository) Init(app interfaces.IEngine, _ map[string]interface{}) error {
 	t.logger = app.GetLogger()
-	t.db = app.GetPkg(interfaces.PkgDatabase, "primary").(postgres.IPostgres)
+	t.db = app.GetPkg(interfaces.PkgDatabase, names.DatabasePrimary).(postgres.IPostgres)
 	t.activationValuesRepository = app.GetModule(interfaces.ModuleRepository, names.ActivationValuesRepository).(ActivationValuesRepository.Interface)
 
 	return nil

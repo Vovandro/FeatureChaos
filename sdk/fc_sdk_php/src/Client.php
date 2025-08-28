@@ -128,6 +128,31 @@ class Client
             }
             $this->features[$name] = $cfg;
         }
+        // Apply deletions after feature updates
+        foreach ($resp->getDeleted() as $d) {
+            $kind = $d->getKind();
+            if ($kind === \FeatureChaos\GetFeatureResponse\DeletedItem\Type::FEATURE) {
+                unset($this->features[$d->getFeatureName()]);
+                continue;
+            }
+            if ($kind === \FeatureChaos\GetFeatureResponse\DeletedItem\Type::KEY) {
+                $fn = $d->getFeatureName();
+                $kn = $d->getKeyName();
+                if (isset($this->features[$fn]['keys'][$kn])) {
+                    unset($this->features[$fn]['keys'][$kn]);
+                }
+                continue;
+            }
+            if ($kind === \FeatureChaos\GetFeatureResponse\DeletedItem\Type::PARAM) {
+                $fn = $d->getFeatureName();
+                $kn = $d->getKeyName();
+                $pn = $d->getParamName();
+                if (isset($this->features[$fn]['keys'][$kn]['items'][$pn])) {
+                    unset($this->features[$fn]['keys'][$kn]['items'][$pn]);
+                }
+                continue;
+            }
+        }
         $this->lastVersion = max($this->lastVersion, (int)$resp->getVersion());
     }
 

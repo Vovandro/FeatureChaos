@@ -19,3 +19,6 @@ engine:
   - type: server
     name: http
     port: 8080
+  - type: server
+    name: http_public
+    port: 8081

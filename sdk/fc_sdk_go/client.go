@@ -288,6 +288,30 @@ func (c *Client) applyUpdate(resp *pb.GetFeatureResponse) {
 		}
 		c.features[cfg.Name] = cfg
 	}
+	// Apply deletions after adding/overwriting features
+	for _, d := range resp.GetDeleted() {
+		switch d.GetKind() {
+		case pb.GetFeatureResponse_DeletedItem_FEATURE:
+			delete(c.features, d.GetFeatureName())
+		case pb.GetFeatureResponse_DeletedItem_KEY:
+			if feat, ok := c.features[d.GetFeatureName()]; ok {
+				if feat.Keys != nil {
+					delete(feat.Keys, d.GetKeyName())
+					c.features[d.GetFeatureName()] = feat
+				}
+			}
+		case pb.GetFeatureResponse_DeletedItem_PARAM:
+			if feat, ok := c.features[d.GetFeatureName()]; ok {
+				if keyCfg, ok2 := feat.Keys[d.GetKeyName()]; ok2 {
+					if keyCfg.Items != nil {
+						delete(keyCfg.Items, d.GetParamName())
+						feat.Keys[d.GetKeyName()] = keyCfg
+						c.features[d.GetFeatureName()] = feat
+					}
+				}
+			}
+		}
+	}
 	if resp.GetVersion() > c.lastVersion {
 		c.lastVersion = resp.GetVersion()
 	}

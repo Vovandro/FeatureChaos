@@ -3,6 +3,7 @@ package StatsService
 import (
 	"context"
 
+	"gitlab.com/devpro_studio/FeatureChaos/names"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/StatsRepository"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/service"
@@ -22,7 +23,7 @@ func New(name string) *Service {
 }
 
 func (t *Service) Init(app interfaces.IEngine, cfg map[string]interface{}) error {
-	t.statsRepository = app.GetModule(interfaces.ModuleRepository, "stats").(StatsRepository.Interface)
+	t.statsRepository = app.GetModule(interfaces.ModuleRepository, names.StatsRepository).(StatsRepository.Interface)
 	return nil
 }
 
