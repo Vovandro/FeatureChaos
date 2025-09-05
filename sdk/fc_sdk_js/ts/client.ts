@@ -134,7 +134,6 @@ export class Client {
     const cfg = this.features.get(featureName);
     if (!cfg) return false;
     let percent = -1;
-    let hashSeed = seed;
     let keyLevel: number | null = null;
     if (attrs) {
       for (const [k, v] of Object.entries(attrs)) {
@@ -142,7 +141,6 @@ export class Client {
         if (!kc) continue;
         if (kc.items[v] !== undefined) {
           percent = kc.items[v];
-          hashSeed = String(v);
           break;
         }
         if (keyLevel === null) keyLevel = kc.all;
@@ -150,14 +148,12 @@ export class Client {
     }
     if (percent < 0 && keyLevel !== null) {
       percent = keyLevel;
-      hashSeed = seed;
     }
     if (percent < 0) {
       percent = cfg.all;
-      hashSeed = seed;
     }
     percent = clampPercent(percent);
-    const enabled = bucketHit(featureName, hashSeed, percent);
+    const enabled = bucketHit(featureName, seed, percent);
     if (enabled && this.autoStats) this.track(featureName);
     return enabled;
   }

@@ -151,7 +151,6 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 
 	// Priority: exact value match -> key-level percent -> feature-level percent
 	percent := -1
-	hashSeed := seed
 	if attrs != nil {
 		// Single pass: prefer exact match; remember first key-level percent
 		keyLevel := -1
@@ -159,7 +158,6 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 			if keyCfg, ok := cfg.Keys[key]; ok {
 				if p, ok2 := keyCfg.Items[val]; ok2 {
 					percent = p
-					hashSeed = val
 					break
 				}
 				if keyLevel < 0 {
@@ -169,12 +167,10 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 		}
 		if percent < 0 && keyLevel >= 0 {
 			percent = keyLevel
-			hashSeed = seed
 		}
 	}
 	if percent < 0 {
 		percent = cfg.AllPercent
-		hashSeed = seed
 	}
 	if percent < 0 {
 		percent = 0
@@ -182,7 +178,7 @@ func (c *Client) IsEnabled(featureName string, seed string, attrs map[string]str
 		percent = 100
 	}
 
-	enabled := fastBucketHit(featureName, hashSeed, percent)
+	enabled := fastBucketHit(featureName, seed, percent)
 	if enabled && c.autoStats {
 		c.Track(featureName)
 	}
@@ -415,11 +411,6 @@ func (c *Client) runStats(ctx context.Context) {
 	}
 }
 
-// percentageHit returns true if hash(seed+featureName) bucket is below percent [0..100]
-func percentageHit(featureName string, seed string, percent int) bool { // deprecated: kept for backwards compatibility
-	return fastBucketHit(featureName, seed, percent)
-}
-
 // fastBucketHit computes a bucket [0..99] using FNV-1a without allocations.
 func fastBucketHit(featureName string, seed string, percent int) bool {
 	// clamp percent
@@ -449,15 +440,4 @@ func fastBucketHit(featureName string, seed string, percent int) bool {
 	}
 	bucket := int(hash % 100)
 	return bucket < percent
-}
-
-func clampPercent(p int) int {
-	switch {
-	case p < 0:
-		return 0
-	case p > 100:
-		return 100
-	default:
-		return p
-	}
 }

@@ -51,18 +51,17 @@ class Client
         // - key exists but no value match -> use provided seed
         // - no key match -> use provided seed with feature-level percent
         $percent = -1;
-        $hashSeed = $seed;
         $keyLevel = null;
         foreach (($attrs ?? []) as $k => $v) {
             if (!isset($cfg['keys'][$k])) continue;
             $kc = $cfg['keys'][$k];
-            if (isset($kc['items'][$v])) { $percent = (int)$kc['items'][$v]; $hashSeed = (string)$v; break; }
+            if (isset($kc['items'][$v])) { $percent = (int)$kc['items'][$v]; break; }
             if ($keyLevel === null) { $keyLevel = (int)($kc['all'] ?? 0); }
         }
-        if ($percent < 0 && $keyLevel !== null) { $percent = $keyLevel; $hashSeed = $seed; }
-        if ($percent < 0) { $percent = (int)($cfg['all'] ?? 0); $hashSeed = $seed; }
+        if ($percent < 0 && $keyLevel !== null) { $percent = $keyLevel; }
+        if ($percent < 0) { $percent = (int)($cfg['all'] ?? 0); }
         if ($percent <= 0) return false;
-        if ($percent >= 100) $enabled = true; else $enabled = $this->fastBucketHit($featureName, $hashSeed, $percent);
+        if ($percent >= 100) $enabled = true; else $enabled = $this->fastBucketHit($featureName, $seed, $percent);
         if ($enabled && $this->autoSendStats) {
             $this->track($featureName);
         }
@@ -154,15 +153,6 @@ class Client
             }
         }
         $this->lastVersion = max($this->lastVersion, (int)$resp->getVersion());
-    }
-
-    private function percentageHit(string $featureName, string $seed, int $percent): bool
-    {
-        $percent = max(0, min(100, $percent));
-        if ($percent <= 0) return false;
-        if ($percent >= 100) return true;
-        $h = crc32($featureName . '::' . $seed);
-        return ($h % 100) < $percent;
     }
 
     private function fastBucketHit(string $featureName, string $seed, int $percent): bool

@@ -69,31 +69,27 @@ class FeatureChaosClient:
 
         keys = cfg.get("keys", {})
         percent = -1
-        hash_seed = seed
         # pass 1: exact value match -> use attribute value as hash seed
         key_level = None
         for k, v in (attrs or {}).items():
             kc = keys.get(k)
             if kc and v in kc.get("items", {}):
                 percent = int(kc["items"][v])
-                hash_seed = str(v)
                 break
             if kc and key_level is None:
                 key_level = int(kc.get("all", 0))
         # pass 2: any key-level percent if no exact match -> use provided seed
         if percent < 0 and key_level is not None:
             percent = key_level
-            hash_seed = seed
         if percent < 0:
             percent = int(cfg.get("all", 0))
-            hash_seed = seed
 
         if percent <= 0:
             return False
         if percent >= 100:
             enabled = True
         else:
-            enabled = self._fast_bucket_hit(feature_name, hash_seed, percent)
+            enabled = self._fast_bucket_hit(feature_name, seed, percent)
         if enabled and self._options.auto_send_stats:
             self.track(feature_name)
         return enabled

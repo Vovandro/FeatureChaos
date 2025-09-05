@@ -77,20 +77,20 @@ public class Client {
         FeatureConfig cfg;
         synchronized (features) { cfg = features.get(featureName); }
         if (cfg == null) return false;
-        int percent = -1; String hashSeed = seed; Integer keyLevel = null;
+        int percent = -1; Integer keyLevel = null;
         if (attrs != null) {
             for (Map.Entry<String, String> e : attrs.entrySet()) {
                 KeyConfig kc = cfg.keys.get(e.getKey());
                 if (kc == null) continue;
                 Integer p = kc.items.get(e.getValue());
-                if (p != null) { percent = p; hashSeed = String.valueOf(e.getValue()); break; }
+                if (p != null) { percent = p; break; }
                 if (keyLevel == null) keyLevel = kc.all;
             }
         }
-        if (percent < 0 && keyLevel != null) { percent = keyLevel; hashSeed = seed; }
-        if (percent < 0) { percent = cfg.all; hashSeed = seed; }
+        if (percent < 0 && keyLevel != null) { percent = keyLevel; }
+        if (percent < 0) { percent = cfg.all; }
         percent = clampPercent(percent);
-        boolean enabled = bucketHit(featureName, hashSeed, percent);
+        boolean enabled = bucketHit(featureName, seed, percent);
         if (enabled && autoSendStats) track(featureName);
         return enabled;
     }

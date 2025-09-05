@@ -23,8 +23,8 @@ import (
 	"gitlab.com/devpro_studio/Paranoia/pkg/cache/memory"
 	"gitlab.com/devpro_studio/Paranoia/pkg/cache/redis"
 	"gitlab.com/devpro_studio/Paranoia/pkg/database/postgres"
-	sentry_log "gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry-log"
-	std_log "gitlab.com/devpro_studio/Paranoia/pkg/logger/std-log"
+	"gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry_log"
+	"gitlab.com/devpro_studio/Paranoia/pkg/logger/std_log"
 	"gitlab.com/devpro_studio/Paranoia/pkg/server/grpc"
 	httpSrv "gitlab.com/devpro_studio/Paranoia/pkg/server/http"
 )
