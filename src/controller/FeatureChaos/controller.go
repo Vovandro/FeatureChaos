@@ -110,14 +110,14 @@ func (t *Controller) Subscribe(request *GetAllFeatureRequest, response grpc2.Ser
 
 				resp.Version = version
 
-				err := response.Send(resp)
-				if err != nil {
+				if err := response.Send(resp); err != nil {
 					return err
 				}
 			}
+
+			lastVersion = version
 		}
 	}
-
 }
 
 func (t *Controller) Stats(request grpc2.ClientStreamingServer[SendStatsRequest, emptypb.Empty]) error {

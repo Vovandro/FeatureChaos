@@ -202,15 +202,30 @@ export class Client {
   }
 
   private applyUpdate(data: UpdatesResponse): void {
-    // upsert features
+    // upsert features (respect -1 = no change)
     for (const f of data.features) {
-      const keys: Record<string, KeyConfig> = {};
+      const name = f.name;
+      const existing = this.features.get(name) || {
+        name,
+        all: 0,
+        keys: {} as Record<string, KeyConfig>,
+      };
+      // Only set top-level percent if not -1
+      if (Number(f.all) !== -1) existing.all = Number(f.all);
+      if (!existing.keys) existing.keys = {} as Record<string, KeyConfig>;
       for (const p of f.props || []) {
-        const items: Record<string, number> = {};
-        for (const [k, v] of Object.entries(p.item || {})) items[k] = Number(v);
-        keys[p.name] = { all: Number(p.all), items };
+        const keyName = p.name;
+        const current = existing.keys[keyName] || {
+          all: 0,
+          items: {} as Record<string, number>,
+        };
+        if (Number(p.all) !== -1) current.all = Number(p.all);
+        const items = p.item || {};
+        for (const [k, v] of Object.entries(items))
+          current.items[k] = Number(v);
+        existing.keys[keyName] = current;
       }
-      this.features.set(f.name, { name: f.name, all: Number(f.all), keys });
+      this.features.set(name, existing);
     }
     // apply deletions
     for (const d of data.deleted || []) {

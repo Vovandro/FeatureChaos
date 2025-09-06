@@ -42,8 +42,18 @@
   Client.prototype._restore = function(){ try { var raw = this.storage.getItem(this._cacheKey()); if(!raw) return; var obj = JSON.parse(raw); this.lastVersion = obj.version||0; this.features.clear(); var f = obj.features||{}; Object.keys(f).forEach((k)=>{ var v = f[k]; this.features.set(k,{ name:v.name, all:+v.all, keys:v.keys||{} }); }); } catch(e){} };
   Client.prototype.applyUpdate = function(data){
     (data.features||[]).forEach((f)=>{
-      var keys = {}; (f.props||[]).forEach((p)=>{ var items={}; Object.keys(p.item||{}).forEach((k)=>{ items[k] = +p.item[k]; }); keys[p.name] = { all:+p.all, items: items }; });
-      this.features.set(f.name, { name:f.name, all:+f.all, keys: keys });
+      var name = f.name;
+      var existing = this.features.get(name) || { name:name, all:0, keys:{} };
+      if (+f.all !== -1) existing.all = +f.all;
+      if (!existing.keys) existing.keys = {};
+      (f.props||[]).forEach((p)=>{
+        var keyName = p.name;
+        var kc = existing.keys[keyName] || { all:0, items:{} };
+        if (+p.all !== -1) kc.all = +p.all;
+        Object.keys(p.item||{}).forEach((k)=>{ kc.items[k] = +p.item[k]; });
+        existing.keys[keyName] = kc;
+      });
+      this.features.set(name, existing);
     });
     (data.deleted||[]).forEach((d)=>{
       if (d.kind===0) this.features.delete(d.feature_name);

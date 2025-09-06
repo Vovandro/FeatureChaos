@@ -14,7 +14,6 @@ import (
 	"gitlab.com/devpro_studio/Paranoia/paranoia/repository"
 	"gitlab.com/devpro_studio/Paranoia/pkg/cache/redis"
 	"gitlab.com/devpro_studio/Paranoia/pkg/database/postgres"
-	"gitlab.com/devpro_studio/go_utils/dataUtils"
 )
 
 type Repository struct {
@@ -26,6 +25,14 @@ type Repository struct {
 
 func New(name string) *Repository {
 	return &Repository{Mock: repository.Mock{NamePkg: name}}
+}
+
+func NewForTest(db postgres.IPostgres, cache redis.IRedis, logger interfaces.ILogger) *Repository {
+	return &Repository{
+		db:     db,
+		cache:  cache,
+		logger: logger,
+	}
 }
 
 func (t *Repository) Init(app interfaces.IEngine, _ map[string]interface{}) error {
@@ -191,8 +198,8 @@ func (t *Repository) GetNewByServiceName(c context.Context, serviceName string, 
 	JOIN service_access sa ON sa.feature_id = av.feature_id
 	JOIN services s ON s.id = sa.service_id
 	JOIN features f ON f.id = av.feature_id
-	JOIN activation_keys ak ON ak.id = av.activation_key_id
-	JOIN activation_params ap ON ap.id = av.activation_param_id
+	LEFT JOIN activation_keys ak ON ak.id = av.activation_key_id
+	LEFT JOIN activation_params ap ON ap.id = av.activation_param_id
 	WHERE s.name = $1 AND av.v > $2
 `, serviceName, lastVersion)
 
@@ -214,62 +221,124 @@ func (t *Repository) GetNewByServiceName(c context.Context, serviceName string, 
 		values = append(values, f)
 	}
 
-	params := make(map[uuid.UUID][]dto.FeatureParam)
+	// Aggregate preserving encounter order and defaulting absent values to -1
+	type featureAgg struct {
+		name      string
+		value     int
+		valueSet  bool
+		isDeleted bool
+	}
+	type keyAgg struct {
+		featureID uuid.UUID
+		name      string
+		value     int
+		valueSet  bool
+		isDeleted bool
+		params    []dto.FeatureParam
+	}
+
+	featureOrder := make([]uuid.UUID, 0)
+	featureById := make(map[uuid.UUID]*featureAgg)
+	keysOrderByFeature := make(map[uuid.UUID][]uuid.UUID)
+	keyById := make(map[uuid.UUID]*keyAgg)
+
+	ensureFeature := func(id uuid.UUID, name string) *featureAgg {
+		if f, ok := featureById[id]; ok {
+			return f
+		}
+		f := &featureAgg{name: name}
+		featureById[id] = f
+		featureOrder = append(featureOrder, id)
+		return f
+	}
+	ensureKey := func(featureID uuid.UUID, keyID uuid.UUID, keyName string) *keyAgg {
+		if k, ok := keyById[keyID]; ok {
+			return k
+		}
+		k := &keyAgg{featureID: featureID, name: keyName, params: make([]dto.FeatureParam, 0)}
+		keyById[keyID] = k
+		keysOrderByFeature[featureID] = append(keysOrderByFeature[featureID], keyID)
+		return k
+	}
 
 	for _, v := range values {
-		if v.ParamId != nil {
-			if _, ok := params[*v.ParamId]; !ok {
-				params[*v.ParamId] = make([]dto.FeatureParam, 0)
+		f := ensureFeature(v.FeatureID, v.FeatureName)
+		// Mark feature deleted only if the feature-level row itself is deleted
+		if v.KeyId == nil && v.ParamId == nil && v.DeletedAt != nil {
+			f.isDeleted = true
+		}
+
+		if v.KeyId == nil {
+			// Feature-level value
+			f.value = v.Value
+			f.valueSet = true
+			continue
+		}
+
+		// Key-level or param-level
+		keyID := *v.KeyId
+		keyName := ""
+		if v.KeyName != nil {
+			keyName = *v.KeyName
+		}
+		k := ensureKey(v.FeatureID, keyID, keyName)
+		// Mark key deleted only if the key-level row itself is deleted
+		if v.ParamId == nil && v.DeletedAt != nil {
+			k.isDeleted = true
+		}
+
+		if v.ParamId == nil {
+			// key-level value
+			k.value = v.Value
+			k.valueSet = true
+		} else {
+			// param-level value
+			paramName := ""
+			if v.ParamName != nil {
+				paramName = *v.ParamName
 			}
-			params[*v.ParamId] = append(params[*v.ParamId], dto.FeatureParam{
+			k.params = append(k.params, dto.FeatureParam{
 				Id:        *v.ParamId,
-				Name:      *v.ParamName,
+				Name:      paramName,
 				Value:     v.Value,
 				IsDeleted: v.DeletedAt != nil,
 			})
 		}
 	}
 
-	keys := make(map[uuid.UUID][]dto.FeatureKey)
-
-	for _, v := range values {
-		if v.KeyId != nil && v.ParamId == nil {
-			if _, ok := keys[v.FeatureID]; !ok {
-				keys[v.FeatureID] = make([]dto.FeatureKey, 0)
-			}
-			featureKey := dto.FeatureKey{
-				Id:        *v.KeyId,
-				Key:       *v.KeyName,
-				Value:     int(v.Value),
-				IsDeleted: v.DeletedAt != nil,
-			}
-
-			if _, ok := params[*v.KeyId]; ok {
-				featureKey.Params = params[*v.KeyId]
-			}
-
-			keys[v.FeatureID] = append(keys[v.FeatureID], featureKey)
+	// Build DTOs preserving order and filling defaults for missing levels
+	result := make([]*dto.Feature, 0, len(featureOrder))
+	for _, fid := range featureOrder {
+		fAgg := featureById[fid]
+		feat := &dto.Feature{
+			ID:        fid,
+			Name:      fAgg.name,
+			Value:     fAgg.value,
+			IsDeleted: fAgg.isDeleted,
 		}
+		if !fAgg.valueSet {
+			feat.Value = -1
+		}
+
+		if order, ok := keysOrderByFeature[fid]; ok {
+			feat.Keys = make([]dto.FeatureKey, 0, len(order))
+			for _, kid := range order {
+				kAgg := keyById[kid]
+				keyDto := dto.FeatureKey{
+					Id:        kid,
+					Key:       kAgg.name,
+					Value:     kAgg.value,
+					IsDeleted: kAgg.isDeleted,
+					Params:    kAgg.params,
+				}
+				if !kAgg.valueSet {
+					keyDto.Value = -1
+				}
+				feat.Keys = append(feat.Keys, keyDto)
+			}
+		}
+		result = append(result, feat)
 	}
 
-	features := make(map[uuid.UUID]*dto.Feature)
-
-	for _, v := range values {
-		if v.KeyId == nil {
-			feature := &dto.Feature{
-				ID:        v.FeatureID,
-				Name:      v.FeatureName,
-				Value:     v.Value,
-				IsDeleted: v.DeletedAt != nil,
-			}
-
-			if _, ok := keys[v.FeatureID]; ok {
-				feature.Keys = keys[v.FeatureID]
-			}
-
-			features[v.FeatureID] = feature
-		}
-	}
-
-	return cachedVersion, dataUtils.MapValues(features), nil
+	return cachedVersion, result, nil
 }

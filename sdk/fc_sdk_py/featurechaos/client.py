@@ -204,15 +204,23 @@ class FeatureChaosClient:
         with self._lock:
             for f in features:
                 name = getattr(f, "Name", "")
-                allp = int(getattr(f, "All", 0))
                 props = getattr(f, "Props", [])
-                keys = {}
+                # merge existing config
+                cfg = self._features.get(name, {"all": 0, "keys": {}})
+                allp = int(getattr(f, "All", 0))
+                if allp != -1:
+                    cfg["all"] = allp
                 for p in props:
                     kname = getattr(p, "Name", "")
+                    kc = cfg.get("keys", {}).get(kname, {"all": 0, "items": {}})
                     kall = int(getattr(p, "All", 0))
+                    if kall != -1:
+                        kc["all"] = kall
                     items = dict(getattr(p, "Item", {}))
-                    keys[kname] = {"all": kall, "items": {str(k): int(v) for k, v in items.items()}}
-                self._features[name] = {"all": allp, "keys": keys}
+                    for ik, iv in items.items():
+                        kc.setdefault("items", {})[str(ik)] = int(iv)
+                    cfg.setdefault("keys", {})[kname] = kc
+                self._features[name] = cfg
             # apply deletions (FEATURE=0, KEY=1, PARAM=2)
             for d in (deletions or []):
                 kind = int(getattr(d, "Kind", 0))

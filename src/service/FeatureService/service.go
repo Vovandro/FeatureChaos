@@ -23,6 +23,12 @@ func New(name string) *Service {
 	}
 }
 
+func NewForTest(activationValuesRepository ActivationValuesRepository.Interface) *Service {
+	return &Service{
+		activationValuesRepository: activationValuesRepository,
+	}
+}
+
 func (t *Service) Init(app interfaces.IEngine, cfg map[string]interface{}) error {
 	t.activationValuesRepository = app.GetModule(interfaces.ModuleRepository, names.ActivationValuesRepository).(ActivationValuesRepository.Interface)
 

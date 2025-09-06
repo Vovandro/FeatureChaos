@@ -132,18 +132,20 @@ public class Client {
 
     private void applyUpdate(GetFeatureResponse resp) {
         synchronized (features) {
-            // upsert
+            // upsert with -1 meaning no change for all values
             for (FeatureChaos.FeatureItem f : resp.getFeaturesList()) {
-                FeatureConfig cfg = new FeatureConfig();
-                cfg.name = f.getName();
-                cfg.all = f.getAll();
+                String name = f.getName();
+                FeatureConfig cfg = features.getOrDefault(name, new FeatureConfig());
+                cfg.name = name;
+                if (cfg.keys == null) cfg.keys = new HashMap<>();
+                if (f.getAll() != -1) cfg.all = f.getAll();
                 for (FeatureChaos.PropsItem p : f.getPropsList()) {
-                    KeyConfig kc = new KeyConfig();
-                    kc.all = p.getAll();
+                    KeyConfig kc = cfg.keys.getOrDefault(p.getName(), new KeyConfig());
+                    if (p.getAll() != -1) kc.all = p.getAll();
                     kc.items.putAll(p.getItemMap());
                     cfg.keys.put(p.getName(), kc);
                 }
-                features.put(cfg.name, cfg);
+                features.put(name, cfg);
             }
             // deletions
             for (FeatureChaos.GetFeatureResponse.DeletedItem d : resp.getDeletedList()) {

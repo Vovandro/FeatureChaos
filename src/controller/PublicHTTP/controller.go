@@ -79,7 +79,17 @@ func (t *Controller) getUpdates(c context.Context, ctx httpSrv.ICtx) {
 				}
 				items[param.Name] = int32(param.Value)
 			}
+
+			// Skip keys that only contain deletions (no value, no non-deleted params)
+			if len(items) == 0 && key.Value == -1 {
+				continue
+			}
 			props = append(props, propsItem{All: int32(key.Value), Name: key.Key, Item: items})
+		}
+
+		// Skip features that only contain deletions (no value, no non-deleted keys)
+		if len(props) == 0 && feature.Value == -1 {
+			continue
 		}
 
 		resp.Features = append(resp.Features, featureItem{All: int32(feature.Value), Name: feature.Name, Props: props})

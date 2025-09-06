@@ -115,15 +115,16 @@ class Client
     {
         foreach ($resp->getFeatures() as $f) {
             $name = $f->getName();
-            $cfg = [
-                'all' => (int)$f->getAll(),
-                'keys' => []
-            ];
+            $cfg = $this->features[$name] ?? ['all' => 0, 'keys' => []];
+            $all = (int)$f->getAll();
+            if ($all !== -1) { $cfg['all'] = $all; }
             foreach ($f->getProps() as $p) {
-                $cfg['keys'][$p->getName()] = [
-                    'all' => (int)$p->getAll(),
-                    'items' => iterator_to_array($p->getItem())
-                ];
+                $kname = $p->getName();
+                $kc = $cfg['keys'][$kname] ?? ['all' => 0, 'items' => []];
+                $kall = (int)$p->getAll();
+                if ($kall !== -1) { $kc['all'] = $kall; }
+                foreach ($p->getItem() as $ik => $iv) { $kc['items'][(string)$ik] = (int)$iv; }
+                $cfg['keys'][$kname] = $kc;
             }
             $this->features[$name] = $cfg;
         }

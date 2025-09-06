@@ -270,19 +270,37 @@ func (c *Client) applyUpdate(resp *pb.GetFeatureResponse) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, f := range resp.GetFeatures() {
-		cfg := FeatureConfig{
-			Name:       f.GetName(),
-			AllPercent: int(f.GetAll()),
-			Keys:       make(map[string]KeyConfig, len(f.GetProps())),
+		name := f.GetName()
+		existing, ok := c.features[name]
+		if !ok {
+			existing = FeatureConfig{Name: name, AllPercent: 0, Keys: make(map[string]KeyConfig)}
+		}
+		// skip setting top-level percent if value is -1 (no change)
+		if int(f.GetAll()) != -1 {
+			existing.AllPercent = int(f.GetAll())
+		}
+		if existing.Keys == nil {
+			existing.Keys = make(map[string]KeyConfig)
 		}
 		for _, p := range f.GetProps() {
-			items := make(map[string]int, len(p.GetItem()))
-			for k, v := range p.GetItem() {
-				items[k] = int(v)
+			keyName := p.GetName()
+			keyCfg, ok := existing.Keys[keyName]
+			if !ok {
+				keyCfg = KeyConfig{AllPercent: 0, Items: make(map[string]int)}
 			}
-			cfg.Keys[p.GetName()] = KeyConfig{AllPercent: int(p.GetAll()), Items: items}
+			// skip setting key-level percent if value is -1 (no change)
+			if int(p.GetAll()) != -1 {
+				keyCfg.AllPercent = int(p.GetAll())
+			}
+			if keyCfg.Items == nil {
+				keyCfg.Items = make(map[string]int)
+			}
+			for k, v := range p.GetItem() {
+				keyCfg.Items[k] = int(v)
+			}
+			existing.Keys[keyName] = keyCfg
 		}
-		c.features[cfg.Name] = cfg
+		c.features[name] = existing
 	}
 	// Apply deletions after adding/overwriting features
 	for _, d := range resp.GetDeleted() {
