@@ -193,7 +193,7 @@ func (t *Repository) GetNewByServiceName(c context.Context, serviceName string, 
 	}
 
 	rows, err := t.db.Query(c, `
-	SELECT av.feature_id, f.name, av.activation_key_id, ak.name, av.activation_param_id, ap.name, av.value, av.v, av.deleted_at
+	SELECT av.feature_id, f.name, av.activation_key_id, ak.key, av.activation_param_id, ap.name, av.value, av.v, av.deleted_at
 	FROM activation_values av
 	JOIN service_access sa ON sa.feature_id = av.feature_id
 	JOIN services s ON s.id = sa.service_id
