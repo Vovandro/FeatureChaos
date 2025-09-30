@@ -213,7 +213,7 @@ curl -X DELETE http://localhost:8080/api/features/{featureId}/services/{serviceI
 
 ### Go SDK (рекомендуется)
 
-Модуль: `sdk/fc_sdk_go` (`go get gitlab.com/devpro_studio/FeatureChaos/sdk/fc_sdk_go@latest`). Пример:
+Модуль: `gitlab.com/devpro_studio/fc_sdk_go` (`go get gitlab.com/devpro_studio/fc_sdk_go@latest`). Пример:
 
 ```go
 package main
@@ -221,7 +221,7 @@ package main
 import (
   "context"
   "fmt"
-  fc "gitlab.com/devpro_studio/FeatureChaos/sdk/fc_sdk_go"
+  fc "gitlab.com/devpro_studio/fc_sdk_go"
 )
 
 func main() {
@@ -234,27 +234,6 @@ func main() {
   fmt.Println("search enabled:", enabled)
 }
 ```
-
-### Python SDK
-
-Реализация в `sdk/fc_sdk_py/featurechaos/client.py` (standalone, без сгенерированных pb).
-
-```python
-from featurechaos.client import FeatureChaosClient, Options
-
-cli = FeatureChaosClient("127.0.0.1:9090", "billing", Options(auto_send_stats=True))
-try:
-    is_on = cli.is_enabled("search", "user-123", {"country": "US"})
-    print("search enabled:", is_on)
-finally:
-    cli.close()
-```
-
-> Примечание: убедитесь, что путь `sdk/fc_sdk_py` доступен в `PYTHONPATH`, либо установите пакет из каталога `sdk/fc_sdk_py`.
-
-### PHP SDK
-
-Исходники расположены в `sdk/fc_sdk_php/`. Простое подключение через Composer (vcs/path пакет) либо прямое использование класса `FeatureChaos\Client` из `sdk/fc_sdk_php/src/Client.php`.
 
 ## Как принимается решение включения фичи
 

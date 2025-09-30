@@ -1,0 +1,15 @@
+[submodule "sdk/fc_sdk_py"]
+	path = sdk/fc_sdk_py
+	url = https://gitlab.com/devpro_studio/fc_sdk_py.git
+[submodule "sdk/fc_sdk_php"]
+	path = sdk/fc_sdk_php
+	url = https://gitlab.com/devpro_studio/fc_sdk_php.git
+[submodule "sdk/fc_sdk_go"]
+	path = sdk/fc_sdk_go
+	url = https://gitlab.com/devpro_studio/fc_sdk_go.git
+[submodule "sdk/fc_sdk_js"]
+	path = sdk/fc_sdk_js
+	url = https://gitlab.com/devpro_studio/fc_sdk_js.git
+[submodule "sdk/fc_sdk_java"]
+	path = sdk/fc_sdk_java
+	url = https://gitlab.com/devpro_studio/fc_sdk_java.git
