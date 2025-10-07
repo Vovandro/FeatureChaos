@@ -60,14 +60,14 @@ func (t *Controller) listFeatures(c context.Context, ctx httpSrv.ICtx) {
 			svcs = make([]*db.ServiceAccess, 0)
 		}
 		svcResp := make([]struct {
-			ID   string "json:\"id\""
-			Name string "json:\"name\""
+			ID   string `json:"id"`
+			Name string `json:"name"`
 		}, len(svcs))
 
 		for i, s := range svcs {
 			svcResp[i] = struct {
-				ID   string "json:\"id\""
-				Name string "json:\"name\""
+				ID   string `json:"id"`
+				Name string `json:"name"`
 			}{ID: s.ServiceId.String(), Name: s.Name}
 		}
 
