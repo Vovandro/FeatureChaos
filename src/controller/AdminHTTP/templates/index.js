@@ -17,7 +17,7 @@ function clearStatus(){ setStatusMessage('', ''); }
 
 async function fetchFeatures(){
   try{
-    const res = await fetch('./api/features');
+    const res = await fetch('{{APP_URL}}/api/features');
     if(!res.ok){
       const txt = await res.text().catch(()=>res.statusText||'');
       setStatusMessage('Ошибка: не удалось загрузить фичи. ' + (txt||('HTTP '+res.status)), 'error');
@@ -123,7 +123,7 @@ async function createFeature(){
   const description = document.getElementById('f-desc').value.trim();
   if(!name){return}
   try{
-    const res = await fetch('./api/features',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, description})});
+    const res = await fetch('{{APP_URL}}/api/features',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, description})});
     if(res.ok){ document.getElementById('f-name').value=''; document.getElementById('f-desc').value=''; clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось создать фичу. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при создании фичи: '+(e && e.message ? e.message : e), 'error'); }
@@ -136,7 +136,7 @@ async function setValue(id){
   if(!f){ return }
   const body = { name: f.name||'', description: f.description||'', value: v };
   try{
-    const res = await fetch('./api/features/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const res = await fetch('{{APP_URL}}/api/features/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось сохранить фичу. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при сохранении фичи: '+(e && e.message ? e.message : e), 'error'); }
@@ -149,7 +149,7 @@ async function setKeyValue(id){
   if(!ctx.feature || !ctx.key){ return }
   const body = { feature_id: ctx.feature.id, key: ctx.key.name||'', value: v };
   try{
-    const res = await fetch('./api/keys/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const res = await fetch('{{APP_URL}}/api/keys/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось сохранить ключ. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при сохранении ключа: '+(e && e.message ? e.message : e), 'error'); }
@@ -158,7 +158,7 @@ async function setKeyValue(id){
 async function del(id){
   if(!confirm('Delete feature?')) return;
   try{
-    const res = await fetch('./api/features/'+id,{method:'DELETE'});
+    const res = await fetch('{{APP_URL}}/api/features/'+id,{method:'DELETE'});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось удалить фичу. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при удалении фичи: '+(e && e.message ? e.message : e), 'error'); }
@@ -170,7 +170,7 @@ async function createKey(featureId){
   value = clampPercent(value);
   if(!key){return}
   try{
-    const res1 = await fetch('./api/features/'+featureId+'/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, value})});
+    const res1 = await fetch('{{APP_URL}}/api/features/'+featureId+'/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, value})});
     if(res1.ok){
       document.getElementById(`k-name-${featureId}`).value='';
       document.getElementById(`k-val-${featureId}`).value='';
@@ -183,7 +183,7 @@ async function createKey(featureId){
 async function deleteKey(id){
   if(!confirm('Delete key?')) return;
   try{
-    const res = await fetch('./api/keys/'+id,{method:'DELETE'});
+    const res = await fetch('{{APP_URL}}/api/keys/'+id,{method:'DELETE'});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось удалить ключ. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при удалении ключа: '+(e && e.message ? e.message : e), 'error'); }
@@ -191,7 +191,7 @@ async function deleteKey(id){
 
 async function fetchServices(){
   try{
-    const res = await fetch('./api/services');
+    const res = await fetch('{{APP_URL}}/api/services');
     if(!res.ok){
       const txt = await res.text().catch(()=>res.statusText||'');
       setStatusMessage('Ошибка: не удалось загрузить сервисы. ' + (txt||('HTTP '+res.status)), 'error');
@@ -208,7 +208,7 @@ async function createService(){
   const name = document.getElementById('s-name').value.trim();
   if(!name){return}
   try{
-    const res = await fetch('./api/services',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+    const res = await fetch('{{APP_URL}}/api/services',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
     if(res.ok){ document.getElementById('s-name').value=''; clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось создать сервис. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при создании сервиса: '+(e && e.message ? e.message : e), 'error'); }
@@ -218,7 +218,7 @@ async function linkService(featureId){
   const sid = document.getElementById('svc-'+featureId).value;
   if(!sid){return}
   try{
-    const res = await fetch('./api/features/'+featureId+'/services/'+sid,{method:'POST'});
+    const res = await fetch('{{APP_URL}}/api/features/'+featureId+'/services/'+sid,{method:'POST'});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось связать сервис. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при связывании сервиса: '+(e && e.message ? e.message : e), 'error'); }
@@ -230,7 +230,7 @@ async function linkServiceMulti(featureId){
   const ids = Array.from(select.selectedOptions||[]).map(o=>o.value);
   try{
     for(const sid of ids){
-      const r = await fetch('./api/features/'+featureId+'/services/'+sid,{method:'POST'});
+      const r = await fetch('{{APP_URL}}/api/features/'+featureId+'/services/'+sid,{method:'POST'});
       if(!r.ok){ const txt = await r.text().catch(()=>r.statusText||''); setStatusMessage('Ошибка: не удалось связать сервис '+sid+'. '+(txt||('HTTP '+r.status)), 'error'); }
     }
     clearStatus();
@@ -241,7 +241,7 @@ async function linkServiceMulti(featureId){
 async function unlinkService(featureId, serviceId){
   if(!confirm('Unlink service?')) return;
   try{
-    const res = await fetch('./api/features/'+featureId+'/services/'+serviceId,{method:'DELETE'});
+    const res = await fetch('{{APP_URL}}/api/features/'+featureId+'/services/'+serviceId,{method:'DELETE'});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось отвязать сервис. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при отвязке сервиса: '+(e && e.message ? e.message : e), 'error'); }
@@ -262,7 +262,7 @@ function renderServicesSidebar(services){
 async function deleteService(id){
   if(!confirm('Delete service?')) return;
   try{
-    const res = await fetch('./api/services/'+id,{method:'DELETE'});
+    const res = await fetch('{{APP_URL}}/api/services/'+id,{method:'DELETE'});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось удалить сервис. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при удалении сервиса: '+(e && e.message ? e.message : e), 'error'); }
@@ -276,7 +276,7 @@ async function createParam(keyId){
   const ctx = findFeatureAndKeyByKeyId(keyId);
   if(!ctx.feature){ return }
   try{
-    const res1 = await fetch('./api/keys/'+keyId+'/params',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({feature_id: ctx.feature.id, name, value})});
+    const res1 = await fetch('{{APP_URL}}/api/keys/'+keyId+'/params',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({feature_id: ctx.feature.id, name, value})});
     if(res1.ok){
       document.getElementById('p-name-'+keyId).value='';
       document.getElementById('p-val-'+keyId).value='';
@@ -293,7 +293,7 @@ async function setParamValue(id){
   if(!ctx.feature || !ctx.key || !ctx.param){ return }
   const body = { feature_id: ctx.feature.id, key_id: ctx.key.id, name: ctx.param.name||'', value: v };
   try{
-    const res = await fetch('./api/params/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const res = await fetch('{{APP_URL}}/api/params/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось сохранить параметр. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при сохранении параметра: '+(e && e.message ? e.message : e), 'error'); }
@@ -302,7 +302,7 @@ async function setParamValue(id){
 async function deleteParam(id){
   if(!confirm('Delete param?')) return;
   try{
-    const res = await fetch('./api/params/'+id,{method:'DELETE'});
+    const res = await fetch('{{APP_URL}}/api/params/'+id,{method:'DELETE'});
     if(res.ok){ clearStatus(); await fetchFeatures(); }
     else { const txt = await res.text().catch(()=>res.statusText||''); setStatusMessage('Ошибка: не удалось удалить параметр. '+(txt||('HTTP '+res.status)), 'error'); }
   }catch(e){ setStatusMessage('Ошибка сети при удалении параметра: '+(e && e.message ? e.message : e), 'error'); }

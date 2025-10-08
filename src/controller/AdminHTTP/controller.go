@@ -5,16 +5,18 @@ import (
 	_ "embed"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"gitlab.com/devpro_studio/FeatureChaos/names"
-	FeatureKeyRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
-	FeatureParamRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
-	FeatureRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
-	ServiceAccessRepository "gitlab.com/devpro_studio/FeatureChaos/src/repository/ServiceAccessRepository"
-	StatsService "gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ServiceAccessRepository"
+	"gitlab.com/devpro_studio/FeatureChaos/src/service/StatsService"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/controller"
 	"gitlab.com/devpro_studio/Paranoia/paranoia/interfaces"
 	httpSrv "gitlab.com/devpro_studio/Paranoia/pkg/server/http"
+	"gitlab.com/devpro_studio/go_utils/decode"
 )
 
 //go:embed templates/index.html
@@ -30,19 +32,33 @@ type Controller struct {
 	params   FeatureParamRepository.Interface
 	stats    StatsService.Interface
 	access   ServiceAccessRepository.Interface
+
+	config Config
+}
+
+type Config struct {
+	AppUrl string `yaml:"app_url"`
 }
 
 func New(name string) *Controller {
 	return &Controller{Mock: controller.Mock{NamePkg: name}}
 }
 
-func (t *Controller) Init(app interfaces.IEngine, _ map[string]interface{}) error {
+func (t *Controller) Init(app interfaces.IEngine, cfg map[string]interface{}) error {
 	t.features = app.GetModule(interfaces.ModuleRepository, names.FeatureRepository).(FeatureRepository.Interface)
 	t.keys = app.GetModule(interfaces.ModuleRepository, names.FeatureKeyRepository).(FeatureKeyRepository.Interface)
 	t.params = app.GetModule(interfaces.ModuleRepository, names.FeatureParamRepository).(FeatureParamRepository.Interface)
 	t.stats = app.GetModule(interfaces.ModuleService, names.StatsService).(StatsService.Interface)
 	t.access = app.GetModule(interfaces.ModuleRepository, names.ServiceAccessRepository).(ServiceAccessRepository.Interface)
 	http := app.GetPkg(interfaces.PkgServer, names.HttpServer).(httpSrv.IHttp)
+
+	err := decode.Decode(cfg, &t.config, "yaml", decode.DecoderStrongFoundDst)
+	if err != nil {
+		return err
+	}
+
+	tplIndexHTML = strings.ReplaceAll(tplIndexHTML, "{{APP_URL}}", t.config.AppUrl)
+	tplIndexJS = strings.ReplaceAll(tplIndexJS, "{{APP_URL}}", t.config.AppUrl)
 
 	// static
 	http.PushRoute("GET", "/", t.indexPage, nil)
