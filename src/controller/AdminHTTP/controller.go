@@ -57,6 +57,8 @@ func (t *Controller) Init(app interfaces.IEngine, cfg map[string]interface{}) er
 		return err
 	}
 
+	t.config.AppUrl = strings.TrimRight(t.config.AppUrl, "/")
+
 	tplIndexHTML = strings.ReplaceAll(tplIndexHTML, "{{APP_URL}}", t.config.AppUrl)
 	tplIndexJS = strings.ReplaceAll(tplIndexJS, "{{APP_URL}}", t.config.AppUrl)
 
