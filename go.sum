@@ -81,12 +81,12 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 gitlab.com/devpro_studio/Paranoia v1.2.8 h1:Itha/Z0d3eco8ffONP7tyRibbHER5NndC285Qm+Rg5U=
 gitlab.com/devpro_studio/Paranoia v1.2.8/go.mod h1:LbaiNCdUdH1C+mCVYe9KXFaMjlG9hurv5cbRJaCgkso=
-gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.2.0 h1:HoJhftfBCAMMb1WfXbf0QJgASQ2oQCt9lbiWMnZeOno=
-gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.2.0/go.mod h1:KRnFyF20vbjhvqJFKkGsZILU0s8dRly0wPR7OpXVX+w=
+gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.2.1 h1:IPkoUu9a9jAtXAOhKpCoZdk03RNMYG7mm8ZrYm1mrVM=
+gitlab.com/devpro_studio/Paranoia/pkg/cache/memory v1.2.1/go.mod h1:KRnFyF20vbjhvqJFKkGsZILU0s8dRly0wPR7OpXVX+w=
 gitlab.com/devpro_studio/Paranoia/pkg/cache/redis v1.2.7 h1:w/+UpxMpRSyPP04hiNRZ6aZlRB9e8FGQUeWT/fK+fDk=
 gitlab.com/devpro_studio/Paranoia/pkg/cache/redis v1.2.7/go.mod h1:s5gRHTkoVBy8Hf6zHJLAaDw//yOX/uExK4UlDg7j+0A=
-gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.2.3 h1:zLX3hQEHgfnJ4qY3qUs6camu9pWTuBAQbeCpECDhkWo=
-gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.2.3/go.mod h1:ilgwhDSB/ob8aIhRIQOEt4RRQaSKuzYMRnC9qMZYcZU=
+gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.2.4 h1:1laa0Knaqszej0fJshu4gwmB6tKAKujrZnnmwGXwBpE=
+gitlab.com/devpro_studio/Paranoia/pkg/database/postgres v1.2.4/go.mod h1:ilgwhDSB/ob8aIhRIQOEt4RRQaSKuzYMRnC9qMZYcZU=
 gitlab.com/devpro_studio/Paranoia/pkg/logger/mock_log v1.2.1 h1:ext3PKcKxwld7EG6/bxCD71Iyks+Rh+BITw3R+Kkrr8=
 gitlab.com/devpro_studio/Paranoia/pkg/logger/mock_log v1.2.1/go.mod h1:jZUIavqhBmOT93D16hteTiharmkTBa9W1cFkR4J1zlI=
 gitlab.com/devpro_studio/Paranoia/pkg/logger/sentry_log v1.2.3 h1:8g0S1HLNN6n5ZHSX3cQfiRSJA56smQ0AXlCHUwKGdEU=
@@ -95,8 +95,8 @@ gitlab.com/devpro_studio/Paranoia/pkg/logger/std_log v1.2.1 h1:9z7nkZkS1uo988Dww
 gitlab.com/devpro_studio/Paranoia/pkg/logger/std_log v1.2.1/go.mod h1:Dt2rx/PhlQOXVsPyAZXhompLc6WjAW1AG/CRcV3nE94=
 gitlab.com/devpro_studio/Paranoia/pkg/server/grpc v1.2.0 h1:bh5/bz0tp7+GuncmFlHHr6BxT/MtN5+LqSjO1AXgdlM=
 gitlab.com/devpro_studio/Paranoia/pkg/server/grpc v1.2.0/go.mod h1:crDqCr1LAq+4UbcOb24cYo2r2QhZu/rfqDSYOasg724=
-gitlab.com/devpro_studio/Paranoia/pkg/server/http v1.2.8 h1:qD0WPi5y+yxuwTbnzFVHuLgkGtPkUsTZE5kD2OTyZM0=
-gitlab.com/devpro_studio/Paranoia/pkg/server/http v1.2.8/go.mod h1:Lvd4NySvF5lNfRoCAx0ZwhTyvG58OXzpyQ0B3vDIpQI=
+gitlab.com/devpro_studio/Paranoia/pkg/server/http v1.2.9 h1:w1NFhNGplE//yVRG4C91S5Snz9n4KBiOWtK+fhBOMZU=
+gitlab.com/devpro_studio/Paranoia/pkg/server/http v1.2.9/go.mod h1:XWFNHXgJDptdJbfGJ5fwuDGu19yAL7ads94XuwC48I4=
 gitlab.com/devpro_studio/go_utils v1.1.5 h1:wRH/RXse2WTwhFoby4HFm7ZLTc8t79Sx+nENewUcHVc=
 gitlab.com/devpro_studio/go_utils v1.1.5/go.mod h1:w5u/t5VoEsj6T+nwGocm3tHE+CE1n1ZRy2VS9qJXoGg=
 go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=
