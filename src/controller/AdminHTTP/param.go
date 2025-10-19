@@ -51,7 +51,7 @@ func (t *Controller) updateParam(c context.Context, ctx httpSrv.ICtx) {
 		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 		return
 	}
-	if err := t.params.UpdateParam(c, id, req.FeatureId, req.KeyId, req.Name, req.Value); err != nil {
+	if err := t.params.UpdateParam(c, req.FeatureId, req.KeyId, id, req.Name, req.Value); err != nil {
 		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}

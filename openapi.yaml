@@ -6,6 +6,94 @@ servers:
   - url: http://localhost:8080
 paths:
   /api/features:
+    get:
+      summary: Get features
+      parameters:
+        - in: query
+          name: service_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: find
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: is_deprecated
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  total_pages:
+                    type: integer
+                  features:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+                        value:
+                          type: integer
+                        used:
+                          type: boolean
+                        is_deprecated:
+                          type: boolean
+                        services:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+                        keys:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+                              value:
+                                type: integer
+                              params:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      type: string
+                                    value:
+                                      type: integer
+                        updated_at:
+                          type: string
+                          format: date-time
+                          description: The date and time the feature was last updated
+                          example: 2021-01-01T00:00:00Z
     post:
       summary: Create feature
       requestBody:

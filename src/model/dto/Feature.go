@@ -1,13 +1,19 @@
 package dto
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Feature struct {
-	ID          uuid.UUID
+	Id          uuid.UUID
 	Name        string
 	Description string
 	Version     int64
 	Value       int
 	IsDeleted   bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	Keys        []FeatureKey
 }

@@ -311,7 +311,7 @@ func (t *Repository) GetNewByServiceName(c context.Context, serviceName string, 
 	for _, fid := range featureOrder {
 		fAgg := featureById[fid]
 		feat := &dto.Feature{
-			ID:        fid,
+			Id:        fid,
 			Name:      fAgg.name,
 			Value:     fAgg.value,
 			IsDeleted: fAgg.isDeleted,
@@ -341,4 +341,213 @@ func (t *Repository) GetNewByServiceName(c context.Context, serviceName string, 
 	}
 
 	return cachedVersion, result, nil
+}
+
+func (t *Repository) GetFeatures(c context.Context, serviceId string, page int, pageSize int, find string, isDeprecated bool, deprecatedTime time.Duration) ([]*dto.Feature, int, error) {
+	/* Full Query:
+
+	   SELECT fo.id, fo.name, fo.description, fo.created_at, fo.updated_at, ak.id, ak.key, ap.id, ap.name, av.value
+	   FROM
+	       activation_values av
+	       JOIN (
+	           SELECT f.id, f.name, f.description, f.created_at as created_at, av.updated_at as updated_at
+	           FROM features f
+	               JOIN (
+	                   SELECT av.feature_id as feature_id, MAX(av.updated_at) as updated_at
+	                   FROM activation_values av
+	                   WHERE
+	                       av.deleted_at IS NULL
+	                   GROUP BY
+	                       av.feature_id
+	               ) av ON av.feature_id = f.id
+	               JOIN (
+	                   SELECT sa.feature_id as feature_id
+	                   FROM service_access sa
+	                   WHERE
+	                       sa.service_id = 'dd82e995-49b3-470a-acdb-1e37df1d0621'
+	               ) sa ON sa.feature_id = f.id
+	           WHERE
+	               f.deleted_at IS NULL
+	   						AND (f.name ILIKE '%t%' OR f.description ILIKE '%t%')
+	   						AND av.updated_at < NOW() - '1 day'::interval
+	           ORDER BY f.created_at DESC
+	   				OFFSET 0
+	   				LIMIT 10
+	       ) fo ON fo.id = av.feature_id
+	       LEFT JOIN activation_keys ak ON ak.id = av.activation_key_id
+	       LEFT JOIN activation_params ap ON ap.id = av.activation_param_id
+	   WHERE
+	       av.deleted_at is null
+	*/
+
+	props := make([]any, 0)
+
+	joins := `JOIN (
+        SELECT av.feature_id as feature_id, MAX(av.updated_at) as updated_at
+        FROM activation_values av
+        WHERE
+            av.deleted_at IS NULL
+        GROUP BY
+            av.feature_id
+    ) av ON av.feature_id = f.id
+		 `
+
+	var where string
+	n := 1
+
+	if serviceId != "" {
+		joins += `JOIN (
+        SELECT sa.feature_id as feature_id
+        FROM service_access sa
+        WHERE
+            sa.service_id = $` + strconv.Itoa(n) + `
+    ) sa ON sa.feature_id = f.id
+		 `
+
+		props = append(props, serviceId)
+		n++
+	}
+
+	if find != "" {
+		where += ` (f.name ILIKE '%' || $` + strconv.Itoa(n) + ` || '%' OR f.description ILIKE '%' || $` + strconv.Itoa(n) + ` || '%')`
+		props = append(props, find)
+		n++
+	}
+
+	if isDeprecated {
+		if where != "" {
+			where += ` AND `
+		}
+
+		where += ` av.updated_at < NOW() - $` + strconv.Itoa(n) + `::interval`
+
+		props = append(props, deprecatedTime.String())
+		n++
+	}
+
+	query := `FROM features f ` + joins
+
+	query += `WHERE f.deleted_at IS NULL `
+
+	if where != "" {
+		query += ` AND ` + where
+	}
+
+	row, err := t.db.QueryRow(c, `SELECT COUNT(*) `+query, props...)
+	if err != nil {
+		t.logger.Error(c, err)
+		return nil, 0, err
+	}
+
+	var total int
+	if err := row.Scan(&total); err != nil {
+		t.logger.Error(c, err)
+		return nil, 0, err
+	}
+
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	query = `SELECT f.id, f.name, f.description, f.created_at as created_at, av.updated_at as updated_at ` + query + `
+	ORDER BY f.created_at DESC
+	OFFSET $` + strconv.Itoa(n) + `
+	LIMIT $` + strconv.Itoa(n+1) + `
+`
+	n++
+	n++
+
+	query = `SELECT fo.id, fo.name, fo.description, fo.created_at, fo.updated_at, ak.id, ak.key, ap.id, ap.name, av.value
+	   FROM
+	       activation_values av
+	       JOIN (
+	           ` + query + `
+	       ) fo ON fo.id = av.feature_id
+	       LEFT JOIN activation_keys ak ON ak.id = av.activation_key_id
+	       LEFT JOIN activation_params ap ON ap.id = av.activation_param_id
+	   where
+	       av.deleted_at is null
+`
+
+	props = append(props, (page-1)*pageSize, pageSize)
+
+	rows, err := t.db.Query(c, query, props...)
+
+	if err != nil {
+		t.logger.Error(c, err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	features := make([]*db.ActivationValuesFull, 0)
+	keys := make(map[uuid.UUID][]*db.ActivationValuesFull)
+	params := make(map[uuid.UUID][]*db.ActivationValuesFull)
+
+	for rows.Next() {
+		var f db.ActivationValuesFull
+
+		if err := rows.Scan(&f.FeatureId, &f.FeatureName, &f.FeatureDescription, &f.FeatureCreatedAt, &f.FeatureUpdatedAt, &f.KeyId, &f.KeyName, &f.ParamId, &f.ParamName, &f.Value); err != nil {
+			t.logger.Error(c, err)
+			continue
+		}
+
+		if f.ParamId != nil {
+			if _, ok := params[*f.KeyId]; !ok {
+				params[*f.KeyId] = make([]*db.ActivationValuesFull, 0)
+			}
+
+			params[*f.KeyId] = append(params[*f.KeyId], &f)
+		} else if f.KeyId != nil {
+			if _, ok := keys[f.FeatureId]; !ok {
+				keys[f.FeatureId] = make([]*db.ActivationValuesFull, 0)
+			}
+
+			keys[f.FeatureId] = append(keys[f.FeatureId], &f)
+		} else {
+			features = append(features, &f)
+		}
+	}
+
+	res := make([]*dto.Feature, 0)
+
+	for _, f := range features {
+		feature := &dto.Feature{
+			Id:          f.FeatureId,
+			Name:        f.FeatureName,
+			Description: f.FeatureDescription,
+			Value:       f.Value,
+			CreatedAt:   f.FeatureCreatedAt,
+			UpdatedAt:   f.FeatureUpdatedAt,
+		}
+
+		if keys, ok := keys[f.FeatureId]; ok {
+			feature.Keys = make([]dto.FeatureKey, 0, len(keys))
+
+			for _, k := range keys {
+				key := dto.FeatureKey{
+					Id:    *k.KeyId,
+					Key:   *k.KeyName,
+					Value: k.Value,
+				}
+
+				if params, ok := params[*k.KeyId]; ok {
+					key.Params = make([]dto.FeatureParam, 0, len(params))
+
+					for _, p := range params {
+						key.Params = append(key.Params, dto.FeatureParam{
+							Id:    *p.ParamId,
+							Name:  *p.ParamName,
+							Value: p.Value,
+						})
+					}
+				}
+
+				feature.Keys = append(feature.Keys, key)
+			}
+		}
+
+		res = append(res, feature)
+	}
+
+	return res, total, nil
 }

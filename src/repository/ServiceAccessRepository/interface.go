@@ -13,6 +13,7 @@ type Interface interface {
 	DeleteService(c context.Context, id uuid.UUID) error
 
 	GetAccess(c context.Context) ([]*db.ServiceAccess, error)
+	GetAccessByFeatures(c context.Context, featureIds []uuid.UUID) (map[uuid.UUID][]*db.ServiceAccess, error)
 	AddAccess(c context.Context, featureId uuid.UUID, serviceId uuid.UUID) error
 	RemoveAccess(c context.Context, featureId uuid.UUID, serviceId uuid.UUID) error
 }

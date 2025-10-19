@@ -109,7 +109,7 @@ func (t *Repository) CreateFeature(c context.Context, name string, description s
 	// Try to restore an existing soft-deleted feature first
 	row, err := tx.QueryRow(c, `
 UPDATE features
-SET description = $2, deleted_at = NULL
+SET description = $2, deleted_at = NULL, created_at = NOW()
 WHERE name = $1 AND deleted_at IS NOT NULL
 RETURNING id
 `, name, description)

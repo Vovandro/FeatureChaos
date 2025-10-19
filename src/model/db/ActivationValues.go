@@ -17,3 +17,16 @@ type ActivationValues struct {
 	V           int64
 	DeletedAt   *time.Time
 }
+
+type ActivationValuesFull struct {
+	FeatureId          uuid.UUID
+	FeatureName        string
+	FeatureDescription string
+	FeatureCreatedAt   time.Time
+	FeatureUpdatedAt   time.Time
+	KeyId              *uuid.UUID
+	KeyName            *string
+	ParamId            *uuid.UUID
+	ParamName          *string
+	Value              int
+}

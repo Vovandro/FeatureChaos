@@ -2,6 +2,8 @@ package ServiceAccessRepository
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"gitlab.com/devpro_studio/FeatureChaos/names"
@@ -104,5 +106,51 @@ func (t *Repository) GetAccess(c context.Context) ([]*db.ServiceAccess, error) {
 		}
 		out = append(out, s)
 	}
+	return out, nil
+}
+
+func (t *Repository) GetAccessByFeatures(c context.Context, featureIds []uuid.UUID) (map[uuid.UUID][]*db.ServiceAccess, error) {
+	// Short-circuit to avoid building an invalid IN () clause
+	if len(featureIds) == 0 {
+		return map[uuid.UUID][]*db.ServiceAccess{}, nil
+	}
+
+	// Build placeholders and args with strongly typed UUIDs to satisfy pgx encoders
+	placeholders := make([]string, 0, len(featureIds))
+	args := make([]any, 0, len(featureIds))
+	for i := range featureIds {
+		placeholders = append(placeholders, "$"+strconv.Itoa(i+1))
+		args = append(args, featureIds[i])
+	}
+
+	query := `
+    SELECT service_access.id, feature_id, service_id, name
+    FROM service_access
+    JOIN services ON service_access.service_id = services.id
+    WHERE feature_id IN (` + strings.Join(placeholders, ",") + `)
+    `
+
+	rows, err := t.db.Query(c, query, args...)
+	if err != nil {
+		t.logger.Error(c, err)
+		return nil, err
+	}
+
+	defer rows.Close()
+	out := make(map[uuid.UUID][]*db.ServiceAccess)
+
+	for rows.Next() {
+		s := &db.ServiceAccess{}
+		if err := rows.Scan(&s.ID, &s.FeatureId, &s.ServiceId, &s.Name); err != nil {
+			t.logger.Error(c, err)
+			continue
+		}
+
+		if _, ok := out[s.FeatureId]; !ok {
+			out[s.FeatureId] = make([]*db.ServiceAccess, 0)
+		}
+		out[s.FeatureId] = append(out[s.FeatureId], s)
+	}
+
 	return out, nil
 }

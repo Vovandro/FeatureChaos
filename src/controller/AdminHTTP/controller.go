@@ -4,10 +4,13 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"gitlab.com/devpro_studio/FeatureChaos/names"
+	"gitlab.com/devpro_studio/FeatureChaos/src/repository/ActivationValuesRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureKeyRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureParamRepository"
 	"gitlab.com/devpro_studio/FeatureChaos/src/repository/FeatureRepository"
@@ -22,22 +25,37 @@ import (
 //go:embed templates/index.html
 var tplIndexHTML string
 
-//go:embed templates/index.js
+//go:embed templates/main.js
 var tplIndexJS string
+
+//go:embed templates/reset.css
+var tplResetCSS string
+
+//go:embed templates/style.css
+var tplStyleCSS string
+
+//go:embed templates/favicon.ico
+var tplFaviconICO string
+
+//go:embed templates/logo.svg
+var tplLogoSVG string
 
 type Controller struct {
 	controller.Mock
-	features FeatureRepository.Interface
-	keys     FeatureKeyRepository.Interface
-	params   FeatureParamRepository.Interface
-	stats    StatsService.Interface
-	access   ServiceAccessRepository.Interface
+	features         FeatureRepository.Interface
+	keys             FeatureKeyRepository.Interface
+	params           FeatureParamRepository.Interface
+	stats            StatsService.Interface
+	access           ServiceAccessRepository.Interface
+	activationValues ActivationValuesRepository.Interface
 
 	config Config
 }
 
 type Config struct {
-	AppUrl string `yaml:"app_url"`
+	AppUrl         string        `yaml:"app_url"`
+	DeprecatedTime time.Duration `yaml:"deprecated_time"`
+	PageSize       int           `yaml:"page_size"`
 }
 
 func New(name string) *Controller {
@@ -50,11 +68,21 @@ func (t *Controller) Init(app interfaces.IEngine, cfg map[string]interface{}) er
 	t.params = app.GetModule(interfaces.ModuleRepository, names.FeatureParamRepository).(FeatureParamRepository.Interface)
 	t.stats = app.GetModule(interfaces.ModuleService, names.StatsService).(StatsService.Interface)
 	t.access = app.GetModule(interfaces.ModuleRepository, names.ServiceAccessRepository).(ServiceAccessRepository.Interface)
+	t.activationValues = app.GetModule(interfaces.ModuleRepository, names.ActivationValuesRepository).(ActivationValuesRepository.Interface)
+
 	http := app.GetPkg(interfaces.PkgServer, names.HttpServer).(httpSrv.IHttp)
 
 	err := decode.Decode(cfg, &t.config, "yaml", decode.DecoderStrongFoundDst)
 	if err != nil {
 		return err
+	}
+
+	if t.config.DeprecatedTime == 0 {
+		return errors.New("deprecated_time is required")
+	}
+
+	if t.config.PageSize == 0 {
+		t.config.PageSize = 20
 	}
 
 	t.config.AppUrl = strings.TrimRight(t.config.AppUrl, "/")
@@ -64,7 +92,11 @@ func (t *Controller) Init(app interfaces.IEngine, cfg map[string]interface{}) er
 
 	// static
 	http.PushRoute("GET", "/", t.indexPage, nil)
-	http.PushRoute("GET", "/index.js", t.indexJS, nil)
+	http.PushRoute("GET", "/main.js", t.mainJS, nil)
+	http.PushRoute("GET", "/reset.css", t.resetCSS, nil)
+	http.PushRoute("GET", "/style.css", t.styleCSS, nil)
+	http.PushRoute("GET", "/favicon.ico", t.faviconICO, nil)
+	http.PushRoute("GET", "/logo.svg", t.logoSVG, nil)
 
 	// features
 	http.PushRoute("GET", "/api/features", t.listFeatures, nil)
@@ -111,6 +143,24 @@ func respondJS(ctx httpSrv.ICtx, status int, s string) {
 	ctx.GetResponse().SetBody([]byte(s))
 }
 
+func respondCSS(ctx httpSrv.ICtx, status int, s string) {
+	ctx.GetResponse().Header().Set("Content-Type", "text/css; charset=utf-8")
+	ctx.GetResponse().SetStatus(status)
+	ctx.GetResponse().SetBody([]byte(s))
+}
+
+func respondICO(ctx httpSrv.ICtx, status int, s string) {
+	ctx.GetResponse().Header().Set("Content-Type", "image/x-icon; charset=utf-8")
+	ctx.GetResponse().SetStatus(status)
+	ctx.GetResponse().SetBody([]byte(s))
+}
+
+func respondSVG(ctx httpSrv.ICtx, status int, s string) {
+	ctx.GetResponse().Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	ctx.GetResponse().SetStatus(status)
+	ctx.GetResponse().SetBody([]byte(s))
+}
+
 func parseJSON[T any](ctx httpSrv.ICtx, out *T) error {
 	defer ctx.GetRequest().GetBody().Close()
 	dec := json.NewDecoder(ctx.GetRequest().GetBody())
@@ -122,6 +172,22 @@ func (t *Controller) indexPage(_ context.Context, ctx httpSrv.ICtx) {
 	respondHTML(ctx, http.StatusOK, tplIndexHTML)
 }
 
-func (t *Controller) indexJS(_ context.Context, ctx httpSrv.ICtx) {
+func (t *Controller) mainJS(_ context.Context, ctx httpSrv.ICtx) {
 	respondJS(ctx, http.StatusOK, tplIndexJS)
+}
+
+func (t *Controller) resetCSS(_ context.Context, ctx httpSrv.ICtx) {
+	respondCSS(ctx, http.StatusOK, tplResetCSS)
+}
+
+func (t *Controller) styleCSS(_ context.Context, ctx httpSrv.ICtx) {
+	respondCSS(ctx, http.StatusOK, tplStyleCSS)
+}
+
+func (t *Controller) faviconICO(_ context.Context, ctx httpSrv.ICtx) {
+	respondICO(ctx, http.StatusOK, tplFaviconICO)
+}
+
+func (t *Controller) logoSVG(_ context.Context, ctx httpSrv.ICtx) {
+	respondSVG(ctx, http.StatusOK, tplLogoSVG)
 }

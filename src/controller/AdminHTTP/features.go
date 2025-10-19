@@ -3,121 +3,104 @@ package AdminHTTP
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
-	"gitlab.com/devpro_studio/FeatureChaos/src/model/db"
 	httpSrv "gitlab.com/devpro_studio/Paranoia/pkg/server/http"
 )
 
 func (t *Controller) listFeatures(c context.Context, ctx httpSrv.ICtx) {
-	items := t.features.ListFeatures(c)
-	access, err := t.access.GetAccess(c)
-	allKeys := t.keys.ListAllKeys(c)
-	allParams := t.params.ListAllParams(c)
+	var req GetFeaturesRequest
+	if err := req.FromRequest(ctx); err != nil {
+		respondJSON(ctx, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 
+	items, count, err := t.activationValues.GetFeatures(c, req.ServiceId, req.Page, t.config.PageSize, req.Find, req.IsDeprecated, t.config.DeprecatedTime)
 	if err != nil {
 		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	var svcMap map[uuid.UUID][]*db.ServiceAccess
-	if t.access != nil && len(access) > 0 {
-		svcMap = make(map[uuid.UUID][]*db.ServiceAccess)
-		for _, a := range access {
-			svcMap[a.FeatureId] = append(svcMap[a.FeatureId], a)
-		}
+
+	totalPages := (count + t.config.PageSize - 1) / t.config.PageSize
+
+	if len(items) == 0 {
+		respondJSON(ctx, http.StatusOK, GetFeaturesResponse{
+			Page:       req.Page,
+			TotalPages: totalPages,
+			Features:   make([]Feature, 0),
+		})
+		return
 	}
 
-	type resp struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Value       int    `json:"value"`
-		Version     int64  `json:"version"`
-		Used        bool   `json:"used"`
-		Services    []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"services"`
-		Keys []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Value  int    `json:"value"`
-			Params []struct {
-				ID    string `json:"id"`
-				Name  string `json:"name"`
-				Value int    `json:"value"`
-			} `json:"params"`
-		} `json:"keys"`
+	features := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		features = append(features, item.Id)
 	}
-	out := make([]resp, 0, len(items))
+
+	access, err := t.access.GetAccessByFeatures(c, features)
+	if err != nil {
+		respondJSON(ctx, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	out := GetFeaturesResponse{
+		Page:       req.Page,
+		TotalPages: totalPages,
+		Features:   make([]Feature, 0, len(items)),
+	}
+
 	for _, it := range items {
 		used := false
 		if t.stats != nil {
 			used = t.stats.IsUsed(context.Background(), it.Name)
 		}
-		svcs, ok := svcMap[it.Id]
-		if !ok {
-			svcs = make([]*db.ServiceAccess, 0)
-		}
-		svcResp := make([]struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		}, len(svcs))
 
-		for i, s := range svcs {
-			svcResp[i] = struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-			}{ID: s.ServiceId.String(), Name: s.Name}
-		}
+		svcResp := make([]Service, 0)
 
-		keys, ok := allKeys[it.Id]
-		if !ok {
-			keys = make([]*db.FeatureKey, 0)
-		}
-		keyResp := make([]struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Value  int    `json:"value"`
-			Params []struct {
-				ID    string `json:"id"`
-				Name  string `json:"name"`
-				Value int    `json:"value"`
-			} `json:"params"`
-		}, len(keys))
-
-		for i, k := range keys {
-			params, ok := allParams[k.Id]
-			if !ok {
-				params = make([]*db.FeatureParam, 0)
+		if svcs, ok := access[it.Id]; ok {
+			for _, svc := range svcs {
+				svcResp = append(svcResp, Service{
+					ID:   svc.ServiceId.String(),
+					Name: svc.Name,
+				})
 			}
-			paramResp := make([]struct {
-				ID    string `json:"id"`
-				Name  string `json:"name"`
-				Value int    `json:"value"`
-			}, len(params))
+		}
 
-			for j, p := range params {
-				paramResp[j] = struct {
-					ID    string `json:"id"`
-					Name  string `json:"name"`
-					Value int    `json:"value"`
-				}{ID: p.Id.String(), Name: p.Name, Value: p.Value}
+		keyResp := make([]Key, 0)
+		for _, key := range it.Keys {
+			k := Key{
+				ID:     key.Id.String(),
+				Name:   key.Key,
+				Value:  key.Value,
+				Params: make([]Param, 0),
 			}
 
-			keyResp[i] = struct {
-				ID     string `json:"id"`
-				Name   string `json:"name"`
-				Value  int    `json:"value"`
-				Params []struct {
-					ID    string `json:"id"`
-					Name  string `json:"name"`
-					Value int    `json:"value"`
-				} `json:"params"`
-			}{ID: k.Id.String(), Name: k.Key, Value: k.Value, Params: paramResp}
+			for _, param := range key.Params {
+				k.Params = append(k.Params, Param{
+					ID:    param.Id.String(),
+					Name:  param.Name,
+					Value: param.Value,
+				})
+			}
+
+			keyResp = append(keyResp, k)
 		}
-		out = append(out, resp{ID: it.Id.String(), Name: it.Name, Description: it.Description, Value: it.Value, Version: it.Version, Used: used, Services: svcResp, Keys: keyResp})
+
+		out.Features = append(out.Features, Feature{
+			ID:           it.Id.String(),
+			Name:         it.Name,
+			Description:  it.Description,
+			Value:        it.Value,
+			Used:         used,
+			Services:     svcResp,
+			Keys:         keyResp,
+			IsDeprecated: time.Since(it.UpdatedAt) > t.config.DeprecatedTime,
+			CreatedAt:    it.CreatedAt,
+			UpdatedAt:    it.UpdatedAt,
+		})
 	}
+
 	respondJSON(ctx, http.StatusOK, out)
 }
 
