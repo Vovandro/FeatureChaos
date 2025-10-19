@@ -56,6 +56,7 @@ type Config struct {
 	AppUrl         string        `yaml:"app_url"`
 	DeprecatedTime time.Duration `yaml:"deprecated_time"`
 	PageSize       int           `yaml:"page_size"`
+	AppTitle       string        `yaml:"app_title"`
 }
 
 func New(name string) *Controller {
@@ -85,9 +86,15 @@ func (t *Controller) Init(app interfaces.IEngine, cfg map[string]interface{}) er
 		t.config.PageSize = 20
 	}
 
+	if t.config.AppTitle == "" {
+		t.config.AppTitle = "test"
+	}
+
 	t.config.AppUrl = strings.TrimRight(t.config.AppUrl, "/")
 
 	tplIndexHTML = strings.ReplaceAll(tplIndexHTML, "{{APP_URL}}", t.config.AppUrl)
+	tplIndexHTML = strings.ReplaceAll(tplIndexHTML, "{{APP_TITLE}}", t.config.AppTitle)
+
 	tplIndexJS = strings.ReplaceAll(tplIndexJS, "{{APP_URL}}", t.config.AppUrl)
 
 	// static

@@ -24,6 +24,7 @@ engine:
     app_url: "http://localhost:8081"
     deprecated_time: 720h # 30 days
     page_size: 20
+    app_title: "dev"
   - type: server
     name: http_public
     port: 8081
