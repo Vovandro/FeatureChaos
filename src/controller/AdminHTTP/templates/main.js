@@ -1,4 +1,42 @@
+// ===== Global helpers (templates, utils, net, state) =====
+function getTemplate(id) {
+  var tpl = document.getElementById(id);
+  return tpl && 'content' in tpl ? tpl : null;
+}
+
+function renderFromTemplate(id, fill) {
+  var tpl = getTemplate(id);
+  if (!tpl) return null;
+  var node = document.importNode(tpl.content, true);
+  if (typeof fill === 'function') fill(node);
+  return node;
+}
+
+function qs(sel, root) { return (root || document).querySelector(sel); }
+function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+function fetchJson(url, options) {
+  var opts = options || {};
+  opts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+  return fetch(url, opts).then(function(resp){
+    if (!resp.ok) throw new Error('http_' + resp.status);
+    return resp.json().catch(function(){ return {}; });
+  });
+}
+
+var api = {
+  get: function(url, opts) { return fetchJson("{{APP_URL}}"+url, Object.assign({ method: 'GET' }, opts || {})); },
+  post: function(url, body, opts) { return fetchJson("{{APP_URL}}"+url, Object.assign({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }, opts || {})); },
+  put: function(url, body, opts) { return fetchJson("{{APP_URL}}"+url, Object.assign({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }, opts || {})); },
+  del: function(url, opts) { return fetchJson("{{APP_URL}}"+url, Object.assign({ method: 'DELETE' }, opts || {})); }
+};
+
+var AppState = {
+  get servicesCatalog() { return Array.isArray(window.__servicesCatalog) ? window.__servicesCatalog : []; },
+  set servicesCatalog(list) { window.__servicesCatalog = Array.isArray(list) ? list : []; }
+};
+
 (function() {
+
   var overlay = document.getElementById('servicesOverlay');
   var toggleBtn = document.getElementById('toggleServicesBtn');
   var closeBtn = document.getElementById('closeServicesBtn');
@@ -58,27 +96,21 @@
     if (!servicesListEl) return;
     servicesListEl.innerHTML = '';
     (list || []).forEach(function(svc) {
-      var li = document.createElement('li');
-      li.setAttribute('data-service-id', svc.id || '');
-
-      var nameSpan = document.createElement('span');
-      nameSpan.textContent = svc.name || svc.id || '';
-
-      var badge = document.createElement('span');
-      badge.className = 'services-overlay__badge';
-      badge.setAttribute('data-badge', svc.active ? 'active' : 'inactive');
-      badge.textContent = svc.active ? 'Активен' : 'Неактивен';
-
-      var delBtn = document.createElement('button');
-      delBtn.className = 'btn btn--danger';
-      delBtn.textContent = 'Удалить';
-      delBtn.setAttribute('data-action', 'delete');
-      delBtn.disabled = !!svc.active;
-
-      li.appendChild(nameSpan);
-      li.appendChild(badge);
-      li.appendChild(delBtn);
-      servicesListEl.appendChild(li);
+      var frag = renderFromTemplate('serviceListItemTemplate', function(node){
+        var root = node.firstElementChild || node;
+        if (!root) return;
+        root.setAttribute('data-service-id', svc.id || '');
+        var nameEl = root.querySelector('.name');
+        if (nameEl) nameEl.textContent = svc.name || svc.id || '';
+        var badge = root.querySelector('.services-overlay__badge');
+        if (badge) {
+          badge.setAttribute('data-badge', svc.active ? 'active' : 'inactive');
+          badge.textContent = svc.active ? 'Активен' : 'Неактивен';
+        }
+        var delBtn = root.querySelector('[data-action="delete"]');
+        if (delBtn) delBtn.disabled = !!svc.active;
+      });
+      if (frag) servicesListEl.appendChild(frag);
     });
   }
 
@@ -120,8 +152,7 @@
 
   function fetchServices() {
     try {
-      fetch('/api/services', { method: 'GET', headers: { 'Accept': 'application/json' } })
-        .then(function(resp){ return resp.json(); })
+      api.get('/api/services')
         .then(function(arr){
           if (!Array.isArray(arr)) return;
           var norm = arr.map(normalizeService);
@@ -161,7 +192,7 @@
       if (!li) return;
       var id = li.getAttribute('data-service-id') || '';
       if (!id) return;
-      var nameNode = li.querySelector('span');
+      var nameNode = li.querySelector('.name');
       var name = nameNode ? String(nameNode.textContent || '').trim() : '';
 
       var ok = true;
@@ -173,12 +204,8 @@
       btn.disabled = true;
       btn.setAttribute('aria-busy', 'true');
 
-      fetch('/api/services/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Accept': 'application/json' } })
-        .then(function(resp){ if (!resp.ok) throw new Error('delete_failed'); })
-        .then(function(){
-          return fetch('/api/services', { method: 'GET', headers: { 'Accept': 'application/json' } });
-        })
-        .then(function(resp){ if (!resp.ok) throw new Error('refresh_failed'); return resp.json(); })
+      api.del('/api/services/' + encodeURIComponent(id))
+        .then(function(){ return api.get('/api/services'); })
         .then(function(arr){
           var norm = Array.isArray(arr) ? arr.map(normalizeService) : [];
           window.__servicesCatalog = norm;
@@ -319,32 +346,28 @@
     if (!feature) return;
     var keysArr = feature.keys || [];
     keysArr.forEach(function(k) {
-      var block = document.createElement('div');
-      block.className = 'feature-card__key';
-
-      var nameEl = document.createElement('div');
-      nameEl.className = 'feature-card__key-name';
-      nameEl.textContent = k.name || k.id || '';
-      block.appendChild(nameEl);
-
-      var paramsWrap = document.createElement('div');
-      paramsWrap.className = 'feature-card__params';
-      var paramsArr = k.params || [];
-      paramsArr.forEach(function(p) {
-        var row = document.createElement('div');
-        row.className = 'feature-card__param';
-        var pn = document.createElement('span');
-        pn.className = 'feature-card__param-name';
-        pn.textContent = (p.name || p.id || '') + ':';
-        var pv = document.createElement('span');
-        pv.className = 'feature-card__param-value';
-        pv.textContent = typeof p.value !== 'undefined' ? String(p.value) + '%' : '0%';
-        row.appendChild(pn);
-        row.appendChild(pv);
-        paramsWrap.appendChild(row);
+      var keyFrag = renderFromTemplate('keyRowTemplate', function(node){
+        var root = node.firstElementChild || node;
+        if (!root) return;
+        var nameEl = root.querySelector('.feature-card__key-name');
+        if (nameEl) nameEl.textContent = k.name || k.id || '';
+        var paramsWrap = root.querySelector('.feature-card__params');
+        if (paramsWrap) {
+          var paramsArr = k.params || [];
+          paramsArr.forEach(function(p){
+            var pFrag = renderFromTemplate('paramRowTemplate', function(pn){
+              var prow = pn.firstElementChild || pn;
+              if (!prow) return;
+              var pnEl = prow.querySelector('.feature-card__param-name');
+              if (pnEl) pnEl.textContent = (p.name || p.id || '') + ':';
+              var pvEl = prow.querySelector('.feature-card__param-value');
+              if (pvEl) pvEl.textContent = (typeof p.value !== 'undefined' ? String(p.value) + '%' : '0%');
+            });
+            if (pFrag) paramsWrap.appendChild(pFrag);
+          });
+        }
       });
-      block.appendChild(paramsWrap);
-      container.appendChild(block);
+      if (keyFrag) container.appendChild(keyFrag);
     });
   }
 
@@ -364,10 +387,7 @@
     }
   }
 
-  function needsAttention(f) {
-    // Assumption: "требуют внимания" = устаревшие фичи
-    return !!f.is_deprecated;
-  }
+  function needsAttention(f) { return !!f.is_deprecated; }
 
   function filterFeatures() {
     var result = features.slice();
@@ -550,12 +570,8 @@
       } catch (_) {}
       featuresFetchController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       var requestSeq = ++featuresFetchSeq;
-      var fetchOpts = { method: 'GET', headers: { 'Accept': 'application/json' } };
-      if (featuresFetchController && featuresFetchController.signal) {
-        fetchOpts.signal = featuresFetchController.signal;
-      }
-      fetch('/api/features' + (qs ? ('?' + qs) : ''), fetchOpts)
-        .then(function(resp){ return resp.json(); })
+      var signal = featuresFetchController && featuresFetchController.signal ? { signal: featuresFetchController.signal } : {};
+      api.get('/api/features' + (qs ? ('?' + qs) : ''), signal)
         .then(function(body){
           // Ignore stale responses from aborted/older requests
           if (requestSeq !== featuresFetchSeq) return;
@@ -659,12 +675,37 @@
       chooseOpt.textContent = 'Выберите сервис';
       selectEl.appendChild(chooseOpt);
       var catalog = Array.isArray(window.__servicesCatalog) ? window.__servicesCatalog : [];
-      catalog.forEach(function(s){
-        var opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name || s.id;
-        selectEl.appendChild(opt);
-      });
+
+      function rebuildSelectOptions() {
+        // Preserve current selection if still available
+        var current = selectEl.value || '';
+        // Clear all options, re-add placeholder
+        selectEl.innerHTML = '';
+        selectEl.appendChild(chooseOpt.cloneNode(true));
+
+        var used = {};
+        (draft.services || []).forEach(function(s){
+          var id = s && s.id != null ? String(s.id) : '';
+          if (id) used[id] = true;
+        });
+
+        var list = Array.isArray(window.__servicesCatalog) ? window.__servicesCatalog : catalog;
+        list.forEach(function(s){
+          var id = s && s.id != null ? String(s.id) : '';
+          if (!id || used[id]) return; // skip already used
+          var opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = (s && s.name) ? s.name : id;
+          selectEl.appendChild(opt);
+        });
+
+        // restore selection if still valid
+        if (current && !used[current] && Array.prototype.some.call(selectEl.options, function(o){ return o.value === current; })) {
+          selectEl.value = current;
+        } else {
+          selectEl.value = '';
+        }
+      }
       if (nameInput && nameInput.parentNode) {
         nameInput.parentNode.replaceChild(selectEl, nameInput);
       }
@@ -681,6 +722,7 @@
           }
           listEl.appendChild(li);
         });
+        rebuildSelectOptions();
       }
 
       root.addEventListener('click', function(e){
@@ -701,11 +743,7 @@
           btn.disabled = true;
           btn.setAttribute('aria-busy', 'true');
 
-          fetch('/api/features/' + encodeURIComponent(featureId) + '/services/' + encodeURIComponent(sid), {
-            method: 'DELETE',
-            headers: { 'Accept': 'application/json' }
-          })
-          .then(function(resp){ if (!resp.ok) throw new Error('remove_failed'); })
+          api.del('/api/features/' + encodeURIComponent(featureId) + '/services/' + encodeURIComponent(sid))
           .then(function(){
             draft.services = (draft.services || []).filter(function(s){ return String(s && s.id) !== sid; });
             // sync main list in background
@@ -727,7 +765,7 @@
         var id = String(selectEl.value || '').trim();
         if (!id || !featureId) return;
         if (!draft.services) draft.services = [];
-        if (!draft.services.some(function(s){ return s && s.id === id; })) {
+        if (!draft.services.some(function(s){ return s && String(s.id) === id; })) {
           var found = null;
           for (var i = 0; i < catalog.length; i++) {
             if (catalog[i] && catalog[i].id === id) { found = catalog[i]; break; }
@@ -738,11 +776,7 @@
           addBtn.disabled = true;
           addBtn.setAttribute('aria-busy', 'true');
 
-          fetch('/api/features/' + encodeURIComponent(featureId) + '/services/' + encodeURIComponent(id), {
-            method: 'POST',
-            headers: { 'Accept': 'application/json' }
-          })
-          .then(function(resp){ if (!resp.ok) throw new Error('add_failed'); return resp.json().catch(function(){ return {}; }); })
+          api.post('/api/features/' + encodeURIComponent(featureId) + '/services/' + encodeURIComponent(id), {})
           .then(function(){
             draft.services.push({ id: id, name: displayName });
             selectEl.value = '';
@@ -944,11 +978,8 @@
         var draftValue = (typeof draft.value === 'number' ? Math.max(0, Math.min(100, draft.value)) : 0);
         if (draftValue !== originalValue && !progress.featureUpdated) {
           tasks.push(function(){
-            return fetch('/api/features/' + encodeURIComponent(featureId), {
-              method: 'PUT',
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: original.name || '', description: original.description || '', value: draftValue })
-            }).then(function(resp){ if (!resp.ok) throw new Error('feature_update_failed'); progress.featureUpdated = true; });
+            return api.put('/api/features/' + encodeURIComponent(featureId), { name: original.name || '', description: original.description || '', value: draftValue })
+              .then(function(){ progress.featureUpdated = true; });
           });
         }
 
@@ -976,11 +1007,8 @@
                 paramObj.id = progress.createdParamIdByTemp[pid];
                 return Promise.resolve();
               }
-              return fetch('/api/keys/' + encodeURIComponent(keyId) + '/params', {
-                method: 'POST',
-                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ feature_id: featureId, name: paramObj.name || paramObj.id || '', value: (typeof paramObj.value === 'number' ? Math.max(0, Math.min(100, paramObj.value)) : 0) })
-              }).then(function(resp){ if (!resp.ok) throw new Error('param_create_failed'); return resp.json().catch(function(){ return {}; }); })
+              return api.post('/api/keys/' + encodeURIComponent(keyId) + '/params', { feature_id: featureId, name: paramObj.name || paramObj.id || '', value: (typeof paramObj.value === 'number' ? Math.max(0, Math.min(100, paramObj.value)) : 0) })
+              .then(function(body){ body = body || {}; return body; })
               .then(function(body){
                 var realPid = body && body.id ? String(body.id) : '';
                 if (!realPid) throw new Error('param_create_no_id');
@@ -1003,12 +1031,8 @@
               var paramsPrev = Array.isArray(nk.params) ? nk.params : [];
               return runSequentially(paramsPrev.map(function(p){ return createParamTask(realKeyIdPrev, p); }));
             }
-            return fetch('/api/features/' + encodeURIComponent(featureId) + '/keys', {
-              method: 'POST',
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: nk.name || nk.id || '', description: '', value: 0 })
-            })
-            .then(function(resp){ if (!resp.ok) throw new Error('key_create_failed'); return resp.json().catch(function(){ return {}; }); })
+            return api.post('/api/features/' + encodeURIComponent(featureId) + '/keys', { key: nk.name || nk.id || '', description: '', value: 0 })
+            .then(function(body){ body = body || {}; return body; })
             .then(function(body){
               var realId = body && body.id ? String(body.id) : '';
               if (!realId) throw new Error('key_create_no_id');
@@ -1055,11 +1079,7 @@
           updatedParams.forEach(function(pid){
             var dp = dParamsById[pid];
             tasks.push(function(){
-              return fetch('/api/params/' + encodeURIComponent(pid), {
-                method: 'PUT',
-                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ feature_id: featureId, key_id: keyId, name: dp.name || '', value: (typeof dp.value === 'number' ? Math.max(0, Math.min(100, dp.value)) : 0) })
-              }).then(function(resp){ if (!resp.ok) throw new Error('param_update_failed'); });
+            return api.put('/api/params/' + encodeURIComponent(pid), { feature_id: featureId, key_id: keyId, name: dp.name || '', value: (typeof dp.value === 'number' ? Math.max(0, Math.min(100, dp.value)) : 0) });
             });
           });
 
@@ -1067,10 +1087,7 @@
           removedParamIds.forEach(function(pid){
             if (progress.deletedParamIds[pid]) return;
             tasks.push(function(){
-              return fetch('/api/params/' + encodeURIComponent(pid), {
-                method: 'DELETE',
-                headers: { 'Accept': 'application/json' }
-              }).then(function(resp){ if (!resp.ok && resp.status !== 404) throw new Error('param_delete_failed'); progress.deletedParamIds[pid] = true; });
+            return api.del('/api/params/' + encodeURIComponent(pid)).then(function(){ progress.deletedParamIds[pid] = true; });
             });
           });
         });
@@ -1079,10 +1096,7 @@
         removedKeyIds.forEach(function(kid){
           if (progress.deletedKeyIds[kid]) return;
           tasks.push(function(){
-            return fetch('/api/keys/' + encodeURIComponent(kid), {
-              method: 'DELETE',
-              headers: { 'Accept': 'application/json' }
-            }).then(function(resp){ if (!resp.ok && resp.status !== 404) throw new Error('key_delete_failed'); progress.deletedKeyIds[kid] = true; });
+            return api.del('/api/keys/' + encodeURIComponent(kid)).then(function(){ progress.deletedKeyIds[kid] = true; });
           });
         });
 
@@ -1138,15 +1152,7 @@
           if (!name) { if (nameEl) nameEl.focus(); return; }
 
           setLoading(true);
-          fetch('/api/features', {
-            method: 'POST',
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, description: description })
-          })
-          .then(function(resp){
-            if (!resp.ok) throw new Error('bad_response');
-            return resp.json().catch(function(){ return {}; });
-          })
+          api.post('/api/features', { name: name, description: description })
           .then(function(){
             fetchFeatures();
             close();
@@ -1204,22 +1210,8 @@
           if (!name) { if (nameEl) nameEl.focus(); return; }
 
           setLoading(true);
-          fetch('/api/services', {
-            method: 'POST',
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name })
-          })
-          .then(function(resp){
-            if (!resp.ok) throw new Error('bad_response');
-            return resp.json().catch(function(){ return {}; });
-          })
-          .then(function(){
-            return fetch('/api/services', { method: 'GET', headers: { 'Accept': 'application/json' } });
-          })
-          .then(function(resp){
-            if (!resp.ok) throw new Error('services_refresh_failed');
-            return resp.json();
-          })
+          api.post('/api/services', { name: name })
+          .then(function(){ return api.get('/api/services'); })
           .then(function(arr){
             var norm = Array.isArray(arr) ? arr.map(normalizeServiceLocal) : [];
             window.__servicesCatalog = norm;
@@ -1267,12 +1259,8 @@
       btn.disabled = true;
       btn.setAttribute('aria-busy', 'true');
 
-      fetch('/api/features/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Accept': 'application/json' } })
-        .then(function(resp){ if (!resp.ok) throw new Error('delete_failed'); })
-        .then(function(){
-          // Refresh from server to keep pagination and filters consistent
-          fetchFeatures();
-        })
+      api.del('/api/features/' + encodeURIComponent(id))
+        .then(function(){ fetchFeatures(); })
         .catch(function(){
           try { window.alert('Не удалось удалить фичу. Повторите попытку.'); } catch (_) {}
           // restore button state if still in DOM (list may re-render)
